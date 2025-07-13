@@ -20,20 +20,57 @@ public:
     BPlusTree(int order = 3);                   // No. of keys per node/page
 
     void insert(int key, int value);            // Insert new key:value pair
+
     std::optional<int> search(int key);         // Search key
+
+    bool update(int key, int newValue);         // Update an existing value
+
+    bool remove(int key);                       // Remove key:value pair
 
     void print();
 
 private:
     int m_Order;
+    int m_MinKeys;
     std::shared_ptr<Node> m_Root;
 
-    // helper function for insertion
+    // --------------------------------------------- HELPER FUNCTIONS -----------------------------------------------
+
+    // --------------------------------------------- [INSERT] ---------------------------------------------------------
+    
     void insertInternal(int key, int value, std::shared_ptr<Node> node, std::shared_ptr<Node>& newChild, int& newKey);
 
-    // helper for search
+    // ----------------------------------------------------------------------------------------------------------------
+
+
+
+    // --------------------------------------------- [REMOVE] ---------------------------------------------------------
+    
+    bool removeInternal(int key, std::shared_ptr<Node> node, std::shared_ptr<Node> parent, int parentIdx,
+    std::shared_ptr<Node> leftSibling, std::shared_ptr<Node> rightSibling);
+
+    // Borrow from left sibling if possible
+    void borrowFromLeft(std::shared_ptr<Node> node, std::shared_ptr<Node> sibling,
+        std::shared_ptr<Node> parent, int parentIdx);
+
+    // Borrow from right sibling if possible
+    void borrowFromRight(std::shared_ptr<Node> node, std::shared_ptr<Node> sibling, 
+        std::shared_ptr<Node> parent, int parentIdx);
+
+    // Merge with left/right sibling
+    void mergeWithSibling(std::shared_ptr<Node> leftNode, std::shared_ptr<Node> rightNode, 
+        std::shared_ptr<Node> parent, int parentIdx);
+
+    // ----------------------------------------------------------------------------------------------------------------
+
+
+    // ---------------------------------------------- [SEARCH] ---------------------------------------------------------
+    
     std::optional<int> searchInternal(int key, std::shared_ptr<Node> node);
 
-    // helper for print
+    // ----------------------------------------------------------------------------------------------------------------
+
+
+    // ----------------------------------------------- [PRINT] --------------------------------------------------------
     void printInternal(std::shared_ptr<Node> node, int level);
 };

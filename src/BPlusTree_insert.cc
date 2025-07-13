@@ -91,9 +91,6 @@ void BPlusTree::insertInternal(
                 auto sibling = std::make_shared<Node>(false); // new right sibling
                 int mid = (m_Order / 2);
 
-                // Promote middle key
-                newKey = node->keys[mid];
-
                 // Right sibling takes keys & children from mid+1 onward
                 sibling->keys.assign(node->keys.begin() + mid + 1, node->keys.end());
                 sibling->children.assign(node->children.begin() + mid + 1, node->children.end());
@@ -103,6 +100,8 @@ void BPlusTree::insertInternal(
                 node->children.resize(mid + 1);
 
                 newChild = sibling;
+                // Promote middle key
+                newKey = node->keys[mid];
             }
             else
             {

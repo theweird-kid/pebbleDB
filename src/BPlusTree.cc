@@ -6,6 +6,7 @@
 BPlusTree::BPlusTree(int order) : m_Order(order)
 {
     m_Root = std::make_shared<Node>(true);
+    m_MinKeys = std::ceil(order/2.0) - 1;
 }
 
 std::optional<int> BPlusTree::search(int key)

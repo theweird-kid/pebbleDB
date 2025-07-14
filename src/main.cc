@@ -1,5 +1,7 @@
 #include "BufferPool.h"
 #include "WindowsFileManager.h"
+#include "WAL.h"
+
 #include <iostream>
 #include <vector>
 
@@ -26,12 +28,10 @@ int main() {
             bp.unpinPage(id);
         }
 
-        // Flush all dirty pages to disk
         std::cout << "Flushing all pages\n";
         bp.flushAll();
 
         std::cout << "Reading back pages:\n";
-
         for (uint32_t id : ids) {
             Page& page = bp.fetchPage(id);
 
@@ -54,7 +54,6 @@ int main() {
         fm.printFreeList();
         std::cout << "\n";
 
-        // Allocate again — should reuse from freelist
         std::cout << "Allocating 2 more pages (should reuse freed ones):\n";
         for (int i = 0; i < 2; ++i) {
             uint32_t id = fm.allocatePage();
@@ -67,6 +66,18 @@ int main() {
         std::cerr << "Error: " << e.what() << "\n";
         return 1;
     }
+
+    // WAL test
+    WAL wal("wal.log");
+
+    wal.logRecord(LogType::BEGIN, 1, 0, nullptr, 0);
+    wal.logRecord(LogType::INSERT, 1, 42, "hello", 5);
+    wal.logRecord(LogType::ERASE, 1, 42, "hello", 5);
+    wal.logRecord(LogType::COMMIT, 1, 0, nullptr, 0);
+
+    wal.flush();
+
+    wal.replay();
 
     return 0;
 }

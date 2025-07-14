@@ -135,6 +135,10 @@ uint32_t WindowsFileManager::allocatePage()
     else    // Allocate free page
     {   
         pageID = m_NextPageID++;
+        Page blank;
+        blank.setPageID(pageID);
+        blank.clear();
+        writePage(blank);
     }
 
     updateMetaPage();

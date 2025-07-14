@@ -1,83 +1,40 @@
-#include "BufferPool.h"
-#include "WindowsFileManager.h"
-#include "WAL.h"
-
+#include "CatalogManager.h"
 #include <iostream>
-#include <vector>
 
 int main() {
-    try {
-        WindowsFileManager fm("test.db");
-        BufferPool bp(fm, 10);
+    CatalogManager catalog("catalog.db");
+    catalog.load();
 
-        std::cout << "Allocating 5 pages\n";
-        std::vector<uint32_t> ids;
+    if (!catalog.tableExists("users")) {
+        TableSchema users;
+        users.name = "users";
+        users.primaryKey = "id";
+        users.columns = {
+            {"id", ColumnType::INT, false},
+            {"name", ColumnType::TEXT, true},
+            {"age", ColumnType::INT, true}
+        };
 
-        // Allocate and write to pages
-        for (int i = 0; i < 5; ++i) {
-            uint32_t id = fm.allocatePage();
-            ids.push_back(id);
-
-            Page& page = bp.fetchPage(id);
-
-            page.header()->m_Type = PageType::LEAF;
-            page.header()->m_NumKeys = i;
-            page.header()->m_NextPageID = 0;
-
-            bp.markDirty(id);
-            bp.unpinPage(id);
-        }
-
-        std::cout << "Flushing all pages\n";
-        bp.flushAll();
-
-        std::cout << "Reading back pages:\n";
-        for (uint32_t id : ids) {
-            Page& page = bp.fetchPage(id);
-
-            std::cout << "PageID: " << id
-                      << ", Type: " << static_cast<int>(page.header()->m_Type)
-                      << ", NumKeys: " << page.header()->m_NumKeys
-                      << ", NextPageID: " << page.header()->m_NextPageID
-                      << "\n";
-
-            bp.unpinPage(id);
-        }
-
-        bp.flushAll();
-
-        std::cout << "Freeing pages 2 & 4\n";
-        fm.freePage(ids[1]);
-        fm.freePage(ids[3]);
-
-        std::cout << "Free Pages\n";
-        fm.printFreeList();
-        std::cout << "\n";
-
-        std::cout << "Allocating 2 more pages (should reuse freed ones):\n";
-        for (int i = 0; i < 2; ++i) {
-            uint32_t id = fm.allocatePage();
-            std::cout << "Allocated PageID: " << id << "\n";
-        }
-
-        bp.flushAll();
-
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-        return 1;
+        catalog.createTable(users);
     }
 
-    // WAL test
-    WAL wal("wal.log");
+    for (const auto& tbl : catalog.listTables()) {
+        auto schema = catalog.getTableSchema(tbl);
+        std::cout << "Table: " << schema.name << "\n";
+        for (const auto& col : schema.columns) {
+            std::cout << "   Column: " << col.name 
+                      << " Type: " << static_cast<int>(col.type) 
+                      << " Nullable: " << col.nullable << "\n";
+        }
+        std::cout << "   PrimaryKey: " << schema.primaryKey << "\n";
+        for(const auto& idx: schema.indexes)
+        {
+            std::cout << "  Index: " << idx << "\n";
+        }
+        std::cout << "\n";
+    }
 
-    wal.logRecord(LogType::BEGIN, 1, 0, nullptr, 0);
-    wal.logRecord(LogType::INSERT, 1, 42, "hello", 5);
-    wal.logRecord(LogType::ERASE, 1, 42, "hello", 5);
-    wal.logRecord(LogType::COMMIT, 1, 0, nullptr, 0);
-
-    wal.flush();
-
-    wal.replay();
+    catalog.save();
 
     return 0;
 }

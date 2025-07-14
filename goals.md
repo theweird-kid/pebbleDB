@@ -1,175 +1,108 @@
-📐 High-level architecture layers (bottom → top)
-🔷 1. Storage Layer (Data and Logs)
-This is the foundation.
-Responsible for reliably storing and fetching bytes — both data and logs.
+📜 Minimal SQL DB Roadmap
+🧱 Phase 1: Foundation (you already started)
+ Storage manager: pages, files, buffer pool
 
-Components:
-Page Manager / Buffer Manager
+ WAL & recovery
 
-You already have an in-memory B+ Tree → next: put its nodes into fixed-size pages (commonly 4KB/8KB).
+ TransactionManager with begin, commit, abort
 
-Implements: load, flush, evict, cache of pages.
+ Lock manager (basic exclusive/shared)
 
-Supports reading and writing pages to disk files.
+📖 Phase 2: Catalog & Metadata
+ Create a Catalog Manager:
 
-Handles page allocation & free lists.
+Stores definitions of tables & columns (schemas)
 
-File System abstraction
+E.g., catalog.db file with:
 
-Maps DB pages to OS files.
+pgsql
+Copy
+Edit
+Table: users
+Columns: id INT, name TEXT
+SQL:
 
-Manages WAL (Write-Ahead Log) and data files.
+sql
+Copy
+Edit
+CREATE TABLE users (id INT, name TEXT);
+Add support to parse CREATE TABLE and record the schema.
 
-Write-Ahead Log (WAL)
+🪄 Phase 3: SQL Parser
+Build or integrate a SQL parser:
 
-Every change is first written sequentially to a WAL.
+Simple hand-written parser → acceptable for now.
 
-Ensures Durability even if the process crashes.
+Support:
 
-Can replay WAL on startup to recover.
+sql
+Copy
+Edit
+CREATE TABLE …;
+INSERT INTO … VALUES …;
+SELECT … FROM … WHERE …;
+UPDATE … SET … WHERE …;
+DELETE FROM … WHERE …;
+Parse query → AST (Abstract Syntax Tree)
 
-🔷 2. Data Structures & Access Methods
-This is where your B+ Tree lives — and others like:
+⚙️ Phase 4: Query Planner & Executor
+Given an AST:
 
-Heap files → unordered storage (for tables).
+Look up the table & schema in catalog
 
-B+ Tree → ordered indexes.
+Use heap files & indexes to find data
 
-Hash Indexes → for quick equality lookups.
+Build an Execution Plan
 
-Tasks:
-Support insert/delete/update/search in indexes and tables.
+E.g., TableScan → Filter → Projection
 
-Manage free space in pages.
+Execution:
 
-Support multiple indexes on a table.
+TableScan: iterate through all pages of a table
 
-Maintain consistency between indexes & tables.
+Filter: apply WHERE conditions
 
-🔷 3. Transaction & Concurrency Control
-This is where we implement ACID properties:
+Projection: return only selected columns
 
-Atomicity
+🗃️ Phase 5: Indexing
+Build a B+ Tree index
 
-Use WAL + undo/redo logging.
+Support CREATE INDEX
 
-Changes of a transaction are either fully applied or fully undone.
+Use during WHERE lookups to avoid full table scans
 
-Consistency
+🔁 Phase 6: Concurrency & Recovery
+Finish TransactionManager:
 
-Your constraints (foreign keys, etc.) + correct implementation.
+Isolation levels: (just SERIALIZABLE or READ COMMITTED for now)
 
-Isolation
+Implement Lock Manager (2PL → two-phase locking)
 
-Allow concurrent transactions to run as if serialized.
+Ensure WAL + buffer pool flush + locks work correctly
 
-Common methods:
+Test recovery: replay WAL after crash
 
-Locks (2PL – two-phase locking)
+Optional (later):
+Joins (nested loop join → hash join → sort-merge join)
 
-MVCC (Multi-Version Concurrency Control)
+Query optimizer (cost-based plan selection)
 
-Serializable isolation levels.
+Aggregations (COUNT, SUM, etc.)
 
-Deadlock detection & prevention.
+More advanced SQL (GROUP BY, ORDER BY)
 
-Durability
+🚀 Example of Supported SQL
+At the end of Phase 4–5 you should be able to handle queries like:
 
-WAL + checkpoints ensure committed data survives crashes.
+sql
+Copy
+Edit
+CREATE TABLE users (id INT, name TEXT);
+INSERT INTO users VALUES (1, 'Alice');
+INSERT INTO users VALUES (2, 'Bob');
+SELECT id, name FROM users WHERE id = 1;
+UPDATE users SET name = 'Charlie' WHERE id = 2;
+DELETE FROM users WHERE id = 1;
+📌 Next Step: TransactionManager
+Before you move to SQL parsing & catalog, finish the TransactionManager, so you have clean support for BEGIN, COMMIT, ABORT, and WAL integration.
 
-Key components here:
-Transaction Manager: assigns transaction IDs, tracks active transactions.
-
-Lock Manager: enforces locking rules.
-
-MVCC Manager (optional): maintains multiple versions of rows.
-
-🔷 4. Query Processing & Optimizer
-Above the storage + concurrency layers is the query engine:
-
-SQL Parser → parse SQL into AST.
-
-Query Planner → convert AST to a plan.
-
-Optimizer → choose efficient plan (index scans, joins, etc.).
-
-Executor → actually runs the plan by calling into storage/index layers.
-
-🔷 5. API / Interface Layer
-Exposes SQL or an API to the user.
-
-Manages client connections, sessions, transactions.
-
-🚀 Suggested Roadmap (Phase-wise)
-Now that you know the layers, here’s a logical progression you can follow:
-
-📄 Phase 1 — Storage Engine
-✅ B+ Tree (in-memory) → done
-🔷 Next:
-
-Add page abstraction & page layout.
-
-Store B+ tree nodes in pages.
-
-Write pages to disk (persistent storage).
-
-Implement a WAL.
-
-Implement buffer pool with LRU eviction.
-
-Support crash recovery (replay WAL).
-
-📄 Phase 2 — Transaction Manager
-Implement basic transactions.
-
-Use WAL for atomicity & durability.
-
-Support BEGIN, COMMIT, ROLLBACK.
-
-Implement locks or MVCC for isolation.
-
-📄 Phase 3 — Concurrency & Isolation
-Implement proper isolation levels:
-
-Read Committed
-
-Repeatable Read
-
-Serializable
-
-Detect & resolve deadlocks.
-
-Add MVCC for higher concurrency if desired.
-
-📄 Phase 4 — SQL & Query Processor
-Build SQL parser.
-
-Simple planner & executor.
-
-Run basic queries: SELECT, INSERT, UPDATE, DELETE.
-
-Support indexes during query execution.
-
-📄 Phase 5 — Advanced
-Optimizer: better plans.
-
-Joins, aggregations, etc.
-
-Distributed (optional).
-
-📚 In Summary
-Layer	Responsibility
-🗄 Storage	Pages, disk, WAL, buffer pool
-📊 Access Methods	B+ trees, heap files, indexes
-🔄 Transactions	ACID, locking, MVCC
-🧠 Query Engine	Parsing, planning, execution
-🌐 Interface	SQL protocol, sessions
-
-💡 Notes for You
-You already have a B+ tree in memory → now make it page-based & persistent.
-
-Build WAL early → it enables recovery & transactions.
-
-Use fixed-size pages and start with a single file DB.
-
-Start with lock-based concurrency, then later try MVCC.

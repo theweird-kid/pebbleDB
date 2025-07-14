@@ -1,79 +1,175 @@
-🚀 PebbleDB — Project Goals & Roadmap
+📐 High-level architecture layers (bottom → top)
+🔷 1. Storage Layer (Data and Logs)
+This is the foundation.
+Responsible for reliably storing and fetching bytes — both data and logs.
 
-🎯 Big Picture:
-✅ Build a lightweight embedded database engine in modern C++ (C++20),
-✅ with reliable persistence, concurrency, and basic transactional support,
-✅ similar in spirit to something like LevelDB, but educational & minimal.
+Components:
+Page Manager / Buffer Manager
 
-📋 Phase-wise Goals
-📑 Phase 1 — Minimal Viable Database
-✅ Command-line program supporting basic CRUD:
+You already have an in-memory B+ Tree → next: put its nodes into fixed-size pages (commonly 4KB/8KB).
 
-put(key, value) → stores key–value pair persistently
+Implements: load, flush, evict, cache of pages.
 
-get(key) → retrieves value for a given key
+Supports reading and writing pages to disk files.
 
-delete(key) → removes key from store
+Handles page allocation & free lists.
 
-Data persists on disk (can shut down & restart and data is still there)
+File System abstraction
 
-Implementation:
+Maps DB pages to OS files.
 
-Single-threaded
+Manages WAL (Write-Ahead Log) and data files.
 
-Naive on-disk format (e.g., append-only log, or simple key-value file)
+Write-Ahead Log (WAL)
 
-In-memory index or full scan to read keys
+Every change is first written sequentially to a WAL.
 
-No transactions yet
+Ensures Durability even if the process crashes.
 
-Deliverable: a working .exe that survives restarts.
+Can replay WAL on startup to recover.
 
+🔷 2. Data Structures & Access Methods
+This is where your B+ Tree lives — and others like:
 
+Heap files → unordered storage (for tables).
 
-🔗 Phase 2 — Concurrency & Safety
-✅ Support multiple threads accessing the DB safely:
+B+ Tree → ordered indexes.
 
-Proper synchronization (mutexes/locks)
+Hash Indexes → for quick equality lookups.
 
-Thread-safe APIs
+Tasks:
+Support insert/delete/update/search in indexes and tables.
 
-Thread pool for serving requests (optional)
+Manage free space in pages.
 
+Support multiple indexes on a table.
 
+Maintain consistency between indexes & tables.
 
+🔷 3. Transaction & Concurrency Control
+This is where we implement ACID properties:
 
-📝 Phase 3 — Write-Ahead Log & Transactions
-✅ Add atomicity & durability:
+Atomicity
 
-WAL (Write-Ahead Log) — writes are logged before applied
+Use WAL + undo/redo logging.
 
-Crash-safe (can recover from log on restart)
+Changes of a transaction are either fully applied or fully undone.
 
-Basic transactions (commit & rollback single operations)
+Consistency
 
+Your constraints (foreign keys, etc.) + correct implementation.
 
+Isolation
 
+Allow concurrent transactions to run as if serialized.
 
-🌲 Phase 4 — Index & Performance
-✅ Replace naive file with a proper data structure:
+Common methods:
 
-B+Tree or SSTable-style file format
-
-Sorted, efficient lookups
-
-Optional caching layer (in-memory LRU)
-
-
-
-
-🌎 Phase 5 — Optional / Stretch Goals
-✅ Advanced features:
+Locks (2PL – two-phase locking)
 
 MVCC (Multi-Version Concurrency Control)
 
-Replication (leader–follower, Raft, etc.)
+Serializable isolation levels.
 
-Networking — expose a server that speaks some protocol (HTTP? gRPC?)
+Deadlock detection & prevention.
 
-Query language or higher-level API
+Durability
+
+WAL + checkpoints ensure committed data survives crashes.
+
+Key components here:
+Transaction Manager: assigns transaction IDs, tracks active transactions.
+
+Lock Manager: enforces locking rules.
+
+MVCC Manager (optional): maintains multiple versions of rows.
+
+🔷 4. Query Processing & Optimizer
+Above the storage + concurrency layers is the query engine:
+
+SQL Parser → parse SQL into AST.
+
+Query Planner → convert AST to a plan.
+
+Optimizer → choose efficient plan (index scans, joins, etc.).
+
+Executor → actually runs the plan by calling into storage/index layers.
+
+🔷 5. API / Interface Layer
+Exposes SQL or an API to the user.
+
+Manages client connections, sessions, transactions.
+
+🚀 Suggested Roadmap (Phase-wise)
+Now that you know the layers, here’s a logical progression you can follow:
+
+📄 Phase 1 — Storage Engine
+✅ B+ Tree (in-memory) → done
+🔷 Next:
+
+Add page abstraction & page layout.
+
+Store B+ tree nodes in pages.
+
+Write pages to disk (persistent storage).
+
+Implement a WAL.
+
+Implement buffer pool with LRU eviction.
+
+Support crash recovery (replay WAL).
+
+📄 Phase 2 — Transaction Manager
+Implement basic transactions.
+
+Use WAL for atomicity & durability.
+
+Support BEGIN, COMMIT, ROLLBACK.
+
+Implement locks or MVCC for isolation.
+
+📄 Phase 3 — Concurrency & Isolation
+Implement proper isolation levels:
+
+Read Committed
+
+Repeatable Read
+
+Serializable
+
+Detect & resolve deadlocks.
+
+Add MVCC for higher concurrency if desired.
+
+📄 Phase 4 — SQL & Query Processor
+Build SQL parser.
+
+Simple planner & executor.
+
+Run basic queries: SELECT, INSERT, UPDATE, DELETE.
+
+Support indexes during query execution.
+
+📄 Phase 5 — Advanced
+Optimizer: better plans.
+
+Joins, aggregations, etc.
+
+Distributed (optional).
+
+📚 In Summary
+Layer	Responsibility
+🗄 Storage	Pages, disk, WAL, buffer pool
+📊 Access Methods	B+ trees, heap files, indexes
+🔄 Transactions	ACID, locking, MVCC
+🧠 Query Engine	Parsing, planning, execution
+🌐 Interface	SQL protocol, sessions
+
+💡 Notes for You
+You already have a B+ tree in memory → now make it page-based & persistent.
+
+Build WAL early → it enables recovery & transactions.
+
+Use fixed-size pages and start with a single file DB.
+
+Start with lock-based concurrency, then later try MVCC.

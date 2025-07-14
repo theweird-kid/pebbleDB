@@ -1,36 +1,21 @@
 #pragma once
 
+#include <fstream>
 #include <string>
+#include <cstdint>
 
-// Write Ahead Logging
-/*  Log Structure
-
-    |   Key Length      |   4 Bytes     |   int32_t  |
-    |   Key             |   variable    |   bytes    |
-    |   Value Length    |   4 Bytes     |   int32_t  |
-    |   Value           |   variable    |   bytes    |
-
-*/
-
-
-class WAL
+class WAL 
 {
 public:
-    WAL(const std::string& filename);
+    WAL(const std::string& logFilename);
     ~WAL();
 
-    // Write Log
-    void append(const std::string& key, const std::string& value);
+    void logInsert(uint32_t pageID, const char* data, size_t len);
+    void logDelete(uint32_t pageID, const char* data, size_t len);
 
-    // Replay Log
-    void replay();
+    void flush();
+    void replay();  // redo/undo
 
 private:
-    // File Discriptor for the currently opened File
-    FILE* m_File;       
-    // File name for the current file
-    std::string m_Filename;
-
-    // Persist updates to Storage
-    void flush();
+    std::ofstream m_LogFile;
 };

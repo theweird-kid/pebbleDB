@@ -35,6 +35,11 @@ Page& BufferPool::fetchPage(uint32_t pageID)
     return m_Pages[pageID].page;
 }
 
+uint32_t BufferPool::allocatePage()
+{
+    return m_FileManager.allocatePage();
+}
+
 void BufferPool::markDirty(uint32_t pageID)
 {
     std::lock_guard<std::mutex> lock(m_Mutex);

@@ -123,7 +123,7 @@ uint32_t WindowsFileManager::allocatePage()
     std::lock_guard<std::recursive_mutex> lock(m_RecMutex);
 
     uint32_t pageID;
-    if(m_FreeListHead != 0)
+    if (m_FreeListHead != 0)
     {
         // reuse page from freelist
         pageID = m_FreeListHead;
@@ -132,18 +132,21 @@ uint32_t WindowsFileManager::allocatePage()
         readPage(pageID, page);
         m_FreeListHead = page.header()->m_NextPageID;
     }
-    else    // Allocate free page
-    {   
+    else
+    {
         pageID = m_NextPageID++;
-        Page blank;
-        blank.setPageID(pageID);
-        blank.clear();
-        writePage(blank);
     }
+
+    // Create a blank page and write it to disk
+    Page blank;
+    blank.setPageID(pageID);
+    blank.clear();  // <<< OK: this just zeroes the buffer
+    writePage(blank);
 
     updateMetaPage();
     return pageID;
 }
+
 
 void WindowsFileManager::freePage(uint32_t pageID)
 {

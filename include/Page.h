@@ -11,7 +11,8 @@ enum class PageType : uint16_t {
     LEAF = 1,
     INTERNAL = 2,
     META = 3,
-    FREE = 4
+    FREE = 4,
+    HEAP = 5
 };
 
 struct PageHeader {

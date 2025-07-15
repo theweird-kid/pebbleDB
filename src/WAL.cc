@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include <stdexcept>
-#include <filesystem>  // C++17
+#include <filesystem>  
 
 WAL::WAL(const std::string& logFilename)
     : m_LogFilename(logFilename)

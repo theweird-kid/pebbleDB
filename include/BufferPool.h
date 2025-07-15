@@ -51,6 +51,9 @@ public:
     // Fetch page into buffer pool if not already present, pin the page ( pinCount++ )
     Page& fetchPage(uint32_t pageID);
 
+    // Allocate a new Page via FileManager
+    uint32_t allocatePage();
+
     // Mark page as dirty ( modified )
     void markDirty(uint32_t pageID);
 

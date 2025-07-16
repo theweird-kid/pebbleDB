@@ -97,7 +97,7 @@ int main() {
         std::cout << "RID: " << rid << " -> " << rec << "\n";
     });
 
-    benchmark(hf, 1024);
+    benchmark(hf, 10000);
 
     return 0;
 }

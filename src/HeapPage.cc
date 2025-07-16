@@ -57,16 +57,18 @@ void HeapPage::setSlot(uint16_t slotID, const Slot& slot)
 
 int HeapPage::insert(const std::string& record) {
     uint16_t spaceNeeded = sizeof(Slot) + record.size();
+    uint16_t freeSpaceAvailable = freeSpaceOffset() - (headerSize() + sizeof(Slot));
 
-    // Check if there is enough free space
-    if(freeSpaceOffset() < headerSize() + spaceNeeded)
+    if (freeSpaceAvailable < record.size()) {
         return -1;  // Not enough space
+    }
 
-    // Look for a reusable slot
+    // Reuse free slot
     for (uint16_t i = 0; i < numSlots(); ++i) {
         Slot slot = getSlot(i);
         if (slot.length == 0) {
             uint16_t offset = freeSpaceOffset() - record.size();
+            if (offset < headerSize()) return -1;
             Slot newSlot{ offset, static_cast<uint16_t>(record.size()) };
             setSlot(i, newSlot);
             std::memcpy(m_Page.data() + offset, record.data(), record.size());
@@ -75,9 +77,10 @@ int HeapPage::insert(const std::string& record) {
         }
     }
 
-    // Else add new slot
+    // New slot
     uint16_t slotID = numSlots();
     uint16_t offset = freeSpaceOffset() - record.size();
+    if (offset < headerSize()) return -1;
 
     Slot slot{ offset, static_cast<uint16_t>(record.size()) };
     setSlot(slotID, slot);

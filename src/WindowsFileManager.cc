@@ -69,8 +69,7 @@ void WindowsFileManager::updateMetaPage()
     }
 }
 
-void WindowsFileManager::readPage(uint32_t pageID, Page& page)
-{
+void WindowsFileManager::readPage(uint32_t pageID, Page& page) {
     std::lock_guard<std::recursive_mutex> lock(m_RecMutex);
 
     LARGE_INTEGER offset;
@@ -79,24 +78,23 @@ void WindowsFileManager::readPage(uint32_t pageID, Page& page)
     DWORD low = static_cast<DWORD>(offset.QuadPart);
     LONG high = static_cast<LONG>(offset.QuadPart >> 32);
 
-    if(SetFilePointer(m_FileHandle, low, &high, FILE_BEGIN) == INVALID_SET_FILE_POINTER
-    && GetLastError() != NO_ERROR)
-    {
-        throw std::runtime_error("Failed to seek to page");
+    DWORD pos = SetFilePointer(m_FileHandle, low, &high, FILE_BEGIN);
+    if (pos == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR) {
+        throw std::runtime_error("Failed to seek to page " + std::to_string(pageID));
     }
 
     DWORD bytesRead = 0;
     BOOL result = ReadFile(m_FileHandle, page.data(), PAGE_SIZE, &bytesRead, nullptr);
-
-    if(!result || bytesRead != PAGE_SIZE) {
-        throw std::runtime_error("Failed to read page " + std::to_string(pageID));
+    if (!result || bytesRead != PAGE_SIZE) {
+        throw std::runtime_error("Failed to read page " + std::to_string(pageID) +
+                                 " (read " + std::to_string(bytesRead) + " bytes)");
     }
 
     page.setPageID(pageID);
 }
 
-void WindowsFileManager::writePage(const Page& page) 
-{
+
+void WindowsFileManager::writePage(const Page& page) {
     std::lock_guard<std::recursive_mutex> lock(m_RecMutex);
 
     LARGE_INTEGER offset;
@@ -105,18 +103,21 @@ void WindowsFileManager::writePage(const Page& page)
     DWORD low = static_cast<DWORD>(offset.QuadPart);
     LONG high = static_cast<LONG>(offset.QuadPart >> 32);
 
-    // seek to the desired page
-    if (!SetFilePointer(m_FileHandle, low, &high, FILE_BEGIN)) {
+    DWORD pos = SetFilePointer(m_FileHandle, low, &high, FILE_BEGIN);
+    if (pos == INVALID_SET_FILE_POINTER && GetLastError() != NO_ERROR) {
         throw std::runtime_error("Failed to seek to page " + std::to_string(page.getPageID()));
     }
 
     DWORD bytesWritten = 0;
     BOOL result = WriteFile(m_FileHandle, page.data(), PAGE_SIZE, &bytesWritten, nullptr);
-
     if (!result || bytesWritten != PAGE_SIZE) {
         throw std::runtime_error("Failed to write page " + std::to_string(page.getPageID()));
     }
+
+    // Ensure data is flushed to disk
+    FlushFileBuffers(m_FileHandle);
 }
+
 
 uint32_t WindowsFileManager::allocatePage()
 {
@@ -139,8 +140,8 @@ uint32_t WindowsFileManager::allocatePage()
 
     // Create a blank page and write it to disk
     Page blank;
-    blank.setPageID(pageID);
     blank.clear();  // <<< OK: this just zeroes the buffer
+    blank.setPageID(pageID);
     writePage(blank);
 
     updateMetaPage();

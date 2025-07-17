@@ -8,15 +8,20 @@
 // Layout of Node
 
 /*
-    | Field                      | Offset       | Size                                                   |
+| Field                      | Offset       | Size                                                   |
 | -------------------------- | ------------ | ------------------------------------------------------ |
-| `PageType` (leaf/internal) | 0            | 2 bytes                                                |
 | `NumKeys`                  | 2            | 2 bytes                                                |
 | `NextLeaf` (only if leaf)  | 4            | 4 bytes (optional)                                     |
 | `Keys[0...n-1]`            | after header | `n * sizeof(int)`                                      |
 | `Pointers[0...n]`          | after keys   | for internal: child PageIDs (n+1), for leaf: recordIDs |
 
 */
+
+constexpr size_t NODE_TYPE_OFFSET      = 0;            // PageType (2 bytes)
+constexpr size_t NODE_NUM_KEYS_OFFSET  = 2;            // uint16_t numKeys (2 bytes)
+constexpr size_t NODE_NEXT_LEAF_OFFSET = 4;            // uint32_t nextLeaf (4 bytes, only if leaf)
+constexpr size_t NODE_HEADER_SIZE_LEAF   = 8;          // 2 + 2 + 4
+constexpr size_t NODE_HEADER_SIZE_INTERNAL = 4;        // 2 + 2
 
 class BPlusTreeNode
 {

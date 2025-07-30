@@ -20,8 +20,7 @@
 BPlusTreeNode::BPlusTreeNode(Page& page)
     : m_Page(page)
 {
-    if(m_Page.header()->m_Type != PageType::LEAF && m_Page.header()->m_Type != PageType::INTERNAL)
-        throw std::runtime_error("Page type is not a B+Tree node");
+    
 }
 
 bool BPlusTreeNode::isLeaf() const
@@ -46,44 +45,41 @@ void BPlusTreeNode::setNumKeys(int n)
     *reinterpret_cast<uint16_t*>(payload + NODE_NUM_KEYS_OFFSET) = static_cast<uint16_t>(n);
 }
 
-int BPlusTreeNode::getKey(int idx) const
-{
-    if(idx < 0 || idx >= numKeys()) 
-        throw std::out_of_range("Key index out of range");
-    
-    const char* payload = m_Page.payload();
-    const int* keys = reinterpret_cast<const int*>(payload + keyOffset());
-    return keys[idx];
-}
-
-void BPlusTreeNode::setKey(int idx, int key) 
-{
-    if(idx < 0 || idx >= numKeys())
+int BPlusTreeNode::getKey(int idx) const {
+    if (idx < 0 || idx >= numKeys())  // You only read valid keys
         throw std::out_of_range("Key index out of range");
 
-    char * payload = m_Page.payload();
-    int* keys = reinterpret_cast<int*>(payload + keyOffset());
-    keys[idx] = key;
+    int key;
+    std::memcpy(&key, m_Page.payload() + keyOffset() + idx * sizeof(int), sizeof(int));
+    return key;
 }
 
-uint64_t BPlusTreeNode::getPointer(int idx) const 
-{
-    if(idx < 0 || idx > numKeys())
-        throw std::out_of_range("Pointer index out of range");
+void BPlusTreeNode::setKey(int idx, int key) {
+    // You can set at most MAX_KEYS keys. During insert idx may equal numKeys().
+    if (idx < 0 || idx >= MAX_KEYS)
+        throw std::out_of_range("Key index out of range");
 
-    const char* payload = m_Page.payload();
-    const uint64_t* ptrs = reinterpret_cast<const uint64_t*>(payload + ptrOffset());
-    return ptrs[idx];
+    std::memcpy(m_Page.payload() + keyOffset() + idx * sizeof(int), &key, sizeof(int));
 }
 
-void BPlusTreeNode::setPointer(int idx, uint64_t ptr)
-{
-    if(idx < 0 || idx > numKeys())
+uint64_t BPlusTreeNode::getPointer(int idx) const {
+    int maxPtrs = isLeaf() ? MAX_PTRS_LEAF : MAX_PTRS_INTERNAL;
+
+    if (idx < 0 || idx >= maxPtrs)
         throw std::out_of_range("Pointer index out of range");
 
-    char* payload = m_Page.payload();
-    uint64_t* ptrs = reinterpret_cast<uint64_t*>(payload + ptrOffset());
-    ptrs[idx] = ptr;
+    uint64_t ptr;
+    std::memcpy(&ptr, m_Page.payload() + ptrOffset() + idx * sizeof(uint64_t), sizeof(uint64_t));
+    return ptr;
+}
+
+void BPlusTreeNode::setPointer(int idx, uint64_t ptr) {
+    int maxPtrs = isLeaf() ? MAX_PTRS_LEAF : MAX_PTRS_INTERNAL;
+
+    if (idx < 0 || idx >= maxPtrs)
+        throw std::out_of_range("Pointer index out of range");
+
+    std::memcpy(m_Page.payload() + ptrOffset() + idx * sizeof(uint64_t), &ptr, sizeof(uint64_t));
 }
 
 uint32_t BPlusTreeNode::getNextLeaf() const
@@ -111,5 +107,5 @@ size_t BPlusTreeNode::keyOffset() const
 
 size_t BPlusTreeNode::ptrOffset() const
 {
-    return keyOffset() + sizeof(int) * numKeys();
+    return keyOffset() + sizeof(int) * MAX_KEYS;
 }

@@ -22,4 +22,6 @@ public:
 
     // Flush any buffered writes to disk.
     virtual void flush() = 0;
+
+    virtual bool pageExists(uint32_t pageID) const = 0;
 };

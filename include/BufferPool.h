@@ -48,6 +48,8 @@ class BufferPool
 public:
     BufferPool(IFileManager& fm, size_t poolSize);
 
+	~BufferPool();
+
     // Fetch page into buffer pool if not already present, pin the page ( pinCount++ )
     Page& fetchPage(uint32_t pageID);
 

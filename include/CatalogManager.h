@@ -1,28 +1,32 @@
 #pragma once
 
-#include "TableSchema.h"
+#include "Page.h"
+#include "BufferPool.h"
 
-#include <unordered_map>
+#include <string>
+#include <vector>
+#include <optional>
 
-class CatalogManager
-{
+struct CatalogEntry {
+    std::string name;
+    uint32_t rootPageID;
+    uint32_t heapStartPageID;
+};
+
+class CatalogManager {
 public:
-    CatalogManager(const std::string& catalogFile);
-    ~CatalogManager();
+    CatalogManager(BufferPool& bufferPool);
 
-    void load();
-    void save();
+    void createCollection(const std::string& name, uint32_t rootPageID, uint32_t heapStartPageID);
 
-    void createTable(const TableSchema& schema);
-    TableSchema getTableSchema(const std::string& tableName) const;
-    std::vector<std::string> listTables() const;
+    std::optional<std::pair<uint32_t, uint32_t>> getCollectionMeta(const std::string& name);
 
-    bool tableExists(const std::string& tableName) const;
+    void updateCollectionMeta(const std::string& name, uint32_t newRootPageID, uint32_t newHeapStartPageID);
 
 private:
-    std::string m_CatalogFile;
-    std::unordered_map<std::string, TableSchema> m_Tables;
+    BufferPool& m_BufferPool;
+    const uint32_t m_CatalogPageID = 1;
 
-    void writeTable(std::ofstream& out, const TableSchema& schema) const;
-    TableSchema readTable(std::ifstream& in) const;
+    std::vector<CatalogEntry> loadCatalog() const;
+    void saveCatalog(const std::vector<CatalogEntry>& entries);
 };

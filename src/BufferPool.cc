@@ -1,12 +1,32 @@
-#include "../include/BufferPool.h"
+#include "BufferPool.h"
+#include <iostream>
 
 BufferPool::BufferPool(IFileManager& fm, size_t poolSize)
     : m_FileManager(fm), m_MaxPages(poolSize)
 {}
 
+BufferPool::~BufferPool()
+{
+    flushAll();  // Ensure all dirty pages are flushed to disk
+}
+
 Page& BufferPool::fetchPage(uint32_t pageID)
 {   
     std::lock_guard<std::mutex> lock(m_Mutex);
+
+	// META PAGE
+    if (pageID == 0) {
+        if(!m_FileManager.pageExists(pageID)) {
+			allocatePage();
+		}
+    }
+    
+	// CATALOG PAGE
+    if(pageID == 1) {
+        if(!m_FileManager.pageExists(pageID)) {
+			allocatePage();  // Ensure Catalog page exists
+		}
+	}
 
     auto it = m_Pages.find(pageID);
     if(it != m_Pages.end())         // Page found in memory
@@ -63,9 +83,9 @@ void BufferPool::unpinPage(uint32_t pageID)
 void BufferPool::flushPage(uint32_t pageID)
 {
     std::lock_guard<std::mutex> lock(m_Mutex);
-
     auto it = m_Pages.find(pageID);
     if(it != m_Pages.end() && it->second.dirty) {
+        std::cout << "flushPage(" << pageID << ")\n";
         m_FileManager.writePage(it->second.page);
         it->second.dirty = false;
     }

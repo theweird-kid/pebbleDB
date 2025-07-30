@@ -23,6 +23,10 @@ constexpr size_t NODE_NEXT_LEAF_OFFSET = 4;            // uint32_t nextLeaf (4 b
 constexpr size_t NODE_HEADER_SIZE_LEAF   = 8;          // 2 + 2 + 4
 constexpr size_t NODE_HEADER_SIZE_INTERNAL = 4;        // 2 + 2
 
+static constexpr int MAX_KEYS = 31;
+static constexpr int MAX_PTRS_INTERNAL = MAX_KEYS + 1;
+static constexpr int MAX_PTRS_LEAF = MAX_KEYS;
+
 class BPlusTreeNode
 {
 public:

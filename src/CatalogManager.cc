@@ -1,155 +1,124 @@
 #include "CatalogManager.h"
+#include <cassert>
 
-#include <fstream>
-#include <stdexcept>
-#include <iostream>
-
-CatalogManager::CatalogManager(const std::string& catalogFile)
-    : m_CatalogFile(catalogFile)
-{}
-
-CatalogManager::~CatalogManager()
+CatalogManager::CatalogManager(BufferPool& bp)
+    : m_BufferPool(bp)
 {
-    save();
-}
-
-void CatalogManager::load()
-{
-    std::ifstream in(m_CatalogFile, std::ios::binary);
-    if(!in) {
-        std::cerr << "Catalog file does not exist. Starting Fresh.\n";
-        return;
+    Page& page = m_BufferPool.fetchPage(m_CatalogPageID);
+    if(page.header()->m_Type != PageType::META) {
+        page.header()->m_Type = PageType::META;
+        page.header()->m_PageID = m_CatalogPageID;
+        page.header()->m_NextPageID = 0;
+        std::memset(page.payload(), 0, PAYLOAD_SIZE);
+        m_BufferPool.markDirty(m_CatalogPageID);
     }
 
-    uint32_t numTables = 0;
-    in.read(reinterpret_cast<char*>(&numTables), sizeof(numTables));
+    m_BufferPool.unpinPage(m_CatalogPageID);
+}
 
-    for(uint32_t idx = 0; idx < numTables; ++idx) {
-        TableSchema t = readTable(in);
-        m_Tables[t.name] = t;
+void CatalogManager::createCollection(
+    const std::string& name,
+    uint32_t rootPageID,
+    uint32_t heapStartPageID
+)
+{
+    assert(name.size() < 256);
+
+    auto entries = loadCatalog();
+    for(auto& entry: entries) {
+        if(entry.name == name)
+            return;             // collection already exists
     }
+
+    entries.push_back({ name, rootPageID, heapStartPageID });
+    saveCatalog(entries);
 }
 
-void CatalogManager::save()
+std::optional<std::pair<uint32_t, uint32_t>> CatalogManager::getCollectionMeta(
+    const std::string& name
+)
 {
-    std::ofstream out(m_CatalogFile, std::ios::binary | std::ios::trunc);
-
-    uint32_t numTables = static_cast<uint32_t>(m_Tables.size());
-    out.write(reinterpret_cast<const char*>(&numTables), sizeof(numTables));
-
-    for(const auto& [name, schema]: m_Tables) {
-        writeTable(out, schema);
+    auto entries = loadCatalog();
+    for (auto& entry : entries) {
+        if (entry.name == name) {
+            return std::make_pair(entry.rootPageID, entry.heapStartPageID);
+        }
     }
+    return std::nullopt;
 }
 
-void CatalogManager::createTable(const TableSchema& schema)
+std::vector<CatalogEntry> CatalogManager::loadCatalog() const
 {
-    if(m_Tables.count(schema.name)) {
-        throw std::runtime_error("Table already exists: " + schema.name);
-    }
-    m_Tables[schema.name] = schema;
-}
+    Page& page = m_BufferPool.fetchPage(m_CatalogPageID);
+    const char* ptr = page.payload();
+    const char* end = ptr + PAYLOAD_SIZE;
 
-TableSchema CatalogManager::getTableSchema(const std::string& tableName) const
-{
-    auto it = m_Tables.find(tableName);
-    if(it == m_Tables.end()) {
-        throw std::runtime_error("Table not found: " + tableName);
-    }
-    return it->second;
-}
-
-std::vector<std::string> CatalogManager::listTables() const
-{
-    std::vector<std::string> names;
-    for(const auto& [name, _]: m_Tables) {
-        names.push_back(name);
-    }
-    return names;
-}
-
-bool CatalogManager::tableExists(const std::string& tableName) const 
-{
-    return m_Tables.count(tableName) > 0;
-}
-
-void CatalogManager::writeTable(std::ofstream& out, const TableSchema& schema) const
-{
-    uint32_t len = schema.name.size();
-    out.write(reinterpret_cast<const char*>(&len), sizeof(len));            // length of schema "name"
-    out.write(schema.name.c_str(), len);                                    // schema name
-
-    uint32_t numCols = static_cast<uint32_t>(schema.columns.size());        
-    out.write(reinterpret_cast<const char*>(&numCols), sizeof(numCols));    // no. of columns
-
-    for(const auto& col: schema.columns) 
+    std::vector<CatalogEntry> entries;
+    while(ptr < end && (*ptr) != 0)
     {
-        len = col.name.size();
-        out.write(reinterpret_cast<const char*>(&len), sizeof(len));        // length of col "name"
-        out.write(col.name.c_str(), len);                                   // col name
+        uint8_t nameLen = static_cast<uint8_t>(*ptr++);
+        if(ptr + nameLen + 8 > end) break;
 
-        out.write(reinterpret_cast<const char*>(&col.type), sizeof(col.type));  // col type
+        std::string name(ptr, nameLen);
+        ptr += nameLen;
 
-        out.write(reinterpret_cast<const char*>(&col.nullable), sizeof(col.nullable));  // col Nullable or not
+        uint32_t rootPageID;
+        std::memcpy(&rootPageID, ptr, 4);
+        ptr += 4;
+
+        uint32_t heapStartPageID;
+        std::memcpy(&heapStartPageID, ptr, 4);
+        ptr += 4;
+
+        entries.push_back({ name, rootPageID, heapStartPageID });
     }
 
-    len = schema.primaryKey.size();
-    out.write(reinterpret_cast<const char*>(&len), sizeof(len));        // length of "primaryKey"
-    out.write(schema.primaryKey.c_str(), len);                          // primaryKey
-
-    uint32_t numIdx = static_cast<uint32_t>(schema.indexes.size());     
-    out.write(reinterpret_cast<const char*>(&numIdx), sizeof(numIdx));  // no. of indexes
-
-    for(const auto& index: schema.indexes)
-    {
-        len = index.size();
-        out.write(reinterpret_cast<const char*>(&len), sizeof(len));    // length of index "name"
-        out.write(index.c_str(), len);                                  // index name
-    }
+    m_BufferPool.unpinPage(m_CatalogPageID);
+    return entries;
 }
 
-TableSchema CatalogManager::readTable(std::ifstream& in) const 
+void CatalogManager::saveCatalog(const std::vector<CatalogEntry>& entries) {
+    Page& page = m_BufferPool.fetchPage(m_CatalogPageID);
+    char* ptr = page.payload();
+    char* end = ptr + PAYLOAD_SIZE;
+
+    for (const auto& entry : entries) {
+        uint8_t nameLen = static_cast<uint8_t>(entry.name.size());
+        if (ptr + 1 + nameLen + 8 > end) break;
+
+        *ptr++ = nameLen;
+        std::memcpy(ptr, entry.name.data(), nameLen);
+        ptr += nameLen;
+
+        std::memcpy(ptr, &entry.rootPageID, 4);
+        ptr += 4;
+
+        std::memcpy(ptr, &entry.heapStartPageID, 4);
+        ptr += 4;
+    }
+
+    // Zero out the rest of the payload to mark the end
+    if (ptr < end) {
+        *ptr = 0;
+    }
+
+    m_BufferPool.markDirty(m_CatalogPageID);
+    m_BufferPool.unpinPage(m_CatalogPageID);
+}
+
+void CatalogManager::updateCollectionMeta(
+    const std::string& name,
+    uint32_t newRootPageID,
+    uint32_t newHeapStartPageID
+)
 {
-    TableSchema schema;
-
-    uint32_t len = 0;
-    in.read(reinterpret_cast<char*>(&len), sizeof(len));        // length of schema "name"
-    schema.name.resize(len);                            
-    in.read(&schema.name[0], len);                              // schema name
-
-    uint32_t numCols = 0;
-    in.read(reinterpret_cast<char*>(&numCols), sizeof(numCols));    // no. of columns
-
-    for(uint32_t idx = 0; idx < numCols; idx++)
-    {
-        Column col;
-
-        in.read(reinterpret_cast<char*>(&len), sizeof(len));        // length of column "name"
-        col.name.resize(len);   
-        in.read(&col.name[0], len);                                 // column name
-
-        in.read(reinterpret_cast<char*>(&col.type), sizeof(col.type));          // column type
-        in.read(reinterpret_cast<char*>(&col.nullable), sizeof(col.nullable));  // column nullable
-
-        schema.columns.push_back(col);
+    auto entries = loadCatalog();
+    for (auto& entry : entries) {
+        if (entry.name == name) {
+            entry.rootPageID = newRootPageID;
+            entry.heapStartPageID = newHeapStartPageID;
+            saveCatalog(entries);
+            return;
+        }
     }
-
-    in.read(reinterpret_cast<char*>(&len), sizeof(len));                // length of primaryKey
-    schema.primaryKey.resize(len);                              
-    in.read(&schema.primaryKey[0], len);                                // primaryKey
-
-    uint32_t numIdx = 0;
-    in.read(reinterpret_cast<char*>(&numIdx), sizeof(numIdx));          // no. of indexes
-    
-    for(uint32_t idx = 0; idx < numIdx; idx++)
-    {
-        std::string index;
-        in.read(reinterpret_cast<char*>(&len), sizeof(len));            // length of index "name"
-        index.resize(len);
-        in.read(&index[0], len);                                        // index
-
-        schema.indexes.push_back(index);
-    }
-
-    return schema;
 }

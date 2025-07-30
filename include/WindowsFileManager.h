@@ -20,6 +20,8 @@ public:
     void flush() override;
 
     void printFreeList();
+
+    bool pageExists(uint32_t pageID) const override;
     
 private:
 

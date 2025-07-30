@@ -7,6 +7,8 @@
 #include <vector>
 #include <string>
 
+constexpr size_t MAX_SLOTS = 1020;
+
 class HeapPage
 {
 public:

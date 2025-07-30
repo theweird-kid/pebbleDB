@@ -6,7 +6,9 @@
 
 constexpr size_t PAGE_SIZE = 4096;
 
-enum class PageType : uint16_t {
+using PageID = uint32_t;
+
+enum class PageType : uint32_t {
     INVALID = 0,
     LEAF = 1,
     INTERNAL = 2,

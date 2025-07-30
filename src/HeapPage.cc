@@ -13,6 +13,14 @@ HeapPage::HeapPage(Page& page)
         numSlots() = 0;
         setFreeSpaceOffset(PAGE_SIZE);
     }
+    else {
+        // Still ensure internal fields are valid
+        if (freeSpaceOffset() == 0 || freeSpaceOffset() > PAGE_SIZE)
+            setFreeSpaceOffset(PAGE_SIZE);
+
+        if (numSlots() > MAX_SLOTS)
+            numSlots() = 0; // fallback sanity check
+    }
 }
 
 uint16_t HeapPage::numSlots() const {

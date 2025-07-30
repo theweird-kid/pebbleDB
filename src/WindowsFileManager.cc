@@ -1,5 +1,5 @@
-#include "../include/WindowsFileManager.h"
-#include "../include/MetaData.h"
+#include "WindowsFileManager.h"
+#include "MetaData.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -140,7 +140,6 @@ uint32_t WindowsFileManager::allocatePage()
 
     // Create a blank page and write it to disk
     Page blank;
-    blank.clear();  // <<< OK: this just zeroes the buffer
     blank.setPageID(pageID);
     writePage(blank);
 
@@ -183,4 +182,14 @@ void WindowsFileManager::printFreeList() {
         std::cout << "Free Page: " << current << "\n";
         current = page.header()->m_NextPageID;
     }
+}
+
+bool WindowsFileManager::pageExists(uint32_t pageID) const {
+    LARGE_INTEGER fileSize;
+    if (!GetFileSizeEx(m_FileHandle, &fileSize)) {
+        throw std::runtime_error("Failed to get file size");
+    }
+
+    LONGLONG pageOffset = static_cast<LONGLONG>(pageID) * PAGE_SIZE;
+    return pageOffset + PAGE_SIZE <= fileSize.QuadPart;
 }

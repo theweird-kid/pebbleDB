@@ -153,12 +153,63 @@ bool BPlusTree::removeInternal(
 }
 
 void BPlusTree::borrowFromLeft(
-    PageID node, 
-    PageID leftSibling,
-    PageID parent, int parentIdx
+    PageID nodeID, 
+    PageID leftSiblingID,
+    PageID parentID, int parentIdx
 )
 {
+    Page& nodePage = m_BufferPool.fetchPage(nodeID);
+    BPlusTreeNode node(nodePage);
 
+    Page& leftPage = m_BufferPool.fetchPage(leftSiblingID);
+    BPlusTreeNode leftSibling(leftPage);
+
+    Page& parentPage = m_BufferPool.fetchPage(parentID);
+    BPlusTreeNode parent(parentPage);
+
+    if (node.isLeaf())
+    {
+        // Move the largest key:value from left sibling to node
+        int borrowedKey = leftSibling.getKey(leftSibling.getNumKeys() - 1);
+        int borrowedValue = leftSibling.getPointer(leftSibling.getNumValues() - 1); 
+
+        // Remove from left Sibling
+        leftSibling.removeKeyAt(leftSibling.getNumKeys() - 1);
+        leftSibling.removeValueAt(leftSibling.getNumValues() - 1);
+
+        // Insert at front of node
+        node.insertKeyAt(0, borrowedKey);
+        node.insertValueAt(0, borrowedValue);
+
+        // Update Parent's separator key
+        parent.setKey(parentIdx - 1, borrowedKey);
+    }
+    else
+    {
+        // Bring down parent's separator key
+        int parentKey = parent.getKey(parentIdx - 1);
+        node.insertKeyAt(0, parentKey);
+
+        // Move last child pointer from left Sibling to front of node
+        int borrowedChild = leftSibling.getPointer(leftSibling.getNumKeys());
+        node.insertPointerAt(0, borrowedChild);
+
+        // update parent key with left sibling's last key
+        int newParentKey = leftSibling.getKey(leftSibling.getNumKeys() - 1);
+        parent.setKey(parentIdx - 1, newParentKey);
+
+        // Remove from left sibling
+        leftSibling.removeKeyAt(leftSibling.getNumKeys() - 1);
+        leftSibling.removePointerAt(leftSibling.getNumValues()-1);
+    }
+
+    m_BufferPool.markDirty(nodeID);
+    m_BufferPool.markDirty(leftSiblingID);
+    m_BufferPool.markDirty(parentID);
+
+    m_BufferPool.unpinPage(nodeID);
+    m_BufferPool.unpinPage(leftSiblingID);
+    m_BufferPool.unpinPage(parentID);
 }
 
 void BPlusTree::borrowFromRight(

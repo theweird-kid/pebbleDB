@@ -58,16 +58,17 @@ private:
     void splitInternal(BPlusTreeNode& node, uint32_t pageID, uint32_t& newInternalPageID, int& newKey);
 
     // --------------------------------------------- [REMOVE] ---------------------------------------------------------
-    bool removeInternal(int key, uint32_t pageID, uint32_t parentID, int parentIdx);
+    // Recursive helper for remove
+    bool removeInternal(int key, PageID node,PageID parent,
+        int parentIdx, PageID leftSibling = 0, PageID rightSibling = 0);
 
-    void borrowFromLeft(BPlusTreeNode& node, BPlusTreeNode& leftSibling,
-        BPlusTreeNode& parent, int parentIdx);
+    // Redistribution helpers
+    void borrowFromLeft(PageID node, PageID leftSibling, PageID parent, int parentIdx);
 
-    void borrowFromRight(BPlusTreeNode& node, BPlusTreeNode& rightSibling,
-        BPlusTreeNode& parent, int parentIdx);
+    void borrowFromRight(PageID node, PageID rightSibling, PageID parent, int parentIdx);
 
-    void mergeWithSibling(BPlusTreeNode& leftNode, BPlusTreeNode& rightNode,
-        BPlusTreeNode& parent, int parentIdx);
+    // Merge helper
+    void mergeWithSibling(PageID leftNode, PageID rightNode, PageID parent, int parentIdx);
 
     // ---------------------------------------------- [SEARCH] --------------------------------------------------------
     std::optional<uint64_t> searchInternal(int key, uint32_t pageID);

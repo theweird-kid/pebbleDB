@@ -35,11 +35,11 @@ int main() {
     std::vector<std::pair<int, std::string>> kvs = {
         {10, "Alice"}, {20, "Bob"}, {30, "Charlie"},
         {40, "David"}, {50, "Eva"}, {60, "Frank"},
-        {70, "Grace"}, {80, "Hannah"}, {90, "Ian"},
-		{100, "Jack"}, {110, "Kathy"}, {120, "Leo"}
+        {70, "Grace"}, /*{80, "Hannah"}, {90, "Ian"},
+		{100, "Jack"}, {110, "Kathy"}, {120, "Leo"}*/
     };
 
-    for (auto& [key, value] : kvs) {
+    /*for (auto& [key, value] : kvs) {
         uint64_t rid = heap->insert(value);
         bool split = tree->insert(key, rid);
         if(split) {
@@ -50,7 +50,7 @@ int main() {
 			);
 		}
         std::cout << "Inserted: " << key << " => " << value << "\n";
-    }
+    }*/
 
     std::cout << "\nVerifying lookups:\n";
     for (auto& [key, expectedValue] : kvs) {

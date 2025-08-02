@@ -191,7 +191,7 @@ void BPlusTree::borrowFromLeft(
         node.insertKeyAt(0, parentKey);
 
         // Move last child pointer from left Sibling to front of node
-        int borrowedChild = leftSibling.getPointer(leftSibling.getNumKeys());
+        uint64_t borrowedChild = leftSibling.getPointer(leftSibling.getNumKeys());
         node.insertPointerAt(0, borrowedChild);
 
         // update parent key with left sibling's last key
@@ -213,12 +213,64 @@ void BPlusTree::borrowFromLeft(
 }
 
 void BPlusTree::borrowFromRight(
-    PageID node, 
-    PageID rightSibling,
-    PageID parent, int parentIdx
+    PageID nodeID, 
+    PageID rightSiblingID,
+    PageID parentID, int parentIdx
 )
 {
+    Page& nodePage = m_BufferPool.fetchPage(nodeID);
+    BPlusTreeNode node(nodePage);
 
+    Page& rightPage = m_BufferPool.fetchPage(rightSiblingID);
+    BPlusTreeNode rightSibling(rightPage);
+
+    Page& parentPage = m_BufferPool.fetchPage(parentID);
+    BPlusTreeNode parent(parentPage);
+
+    if (node.isLeaf())
+    {
+        // Move the smallest key:value pair from right Sibling to node
+        int borrowedKey = rightSibling.getKey(0);
+        int borrowedValue = rightSibling.getValue(0);
+
+        // Remove from right Sibling
+        rightSibling.removeKeyAt(0);
+        rightSibling.removeValueAt(0);
+
+        // Insert at the end of the node
+        node.insertKeyAt(node.getNumKeys(), borrowedKey);
+        node.insertValueAt(node.getNumValues(), borrowedValue);
+
+        // Update Parent's separator key to new first key of right Sibling
+        if (rightSibling.getNumKeys() > 0)
+            parent.setKey(parentIdx, rightSibling.getKey(0));
+    }
+    else
+    {
+        // Bring down parent's separator key into node
+        int parentKey = parent.getKey(parentIdx);
+        node.insertKeyAt(node.getNumKeys(), parentKey);
+
+        // Bring over the first child pointer from right Sibling
+        uint64_t borrowedChild = rightSibling.getPointer(0);
+        node.insertPointerAt(node.getNumValues(), borrowedChild);
+
+        // Update parent's key with right Sibling's first key
+        int newParentKey = rightSibling.getKey(0);
+        parent.setKey(parentIdx, newParentKey);
+
+        // Remove borrowed key and pointer from right sibling
+        rightSibling.removeKeyAt(0);
+        rightSibling.removePointerAt(0);
+    }
+
+    m_BufferPool.markDirty(nodeID);
+    m_BufferPool.markDirty(rightSiblingID);
+    m_BufferPool.markDirty(parentID);
+
+    m_BufferPool.unpinPage(nodeID);
+    m_BufferPool.unpinPage(rightSiblingID);
+    m_BufferPool.unpinPage(parentID);
 }
 
 void BPlusTree::mergeWithSibling(

@@ -39,7 +39,7 @@ void BPlusTree::insertInternal(
     Page& page = m_BufferPool.fetchPage(pageID);
     BPlusTreeNode node(page);
 
-    int n = node.numKeys();
+    int n = node.getNumKeys();
     int idx = 0;
     while (idx < n && node.getKey(idx) < key)
         idx++;
@@ -55,7 +55,7 @@ void BPlusTree::insertInternal(
         node.setPointer(idx, value);
         node.setNumKeys(n + 1);
 
-        if (node.numKeys() > m_Order) {
+        if (node.getNumKeys() > m_Order) {
             splitLeaf(node, pageID, newChildPageID, promotedKey);
         } else {
             newChildPageID = 0;

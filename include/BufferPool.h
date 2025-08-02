@@ -54,7 +54,7 @@ public:
     Page& fetchPage(uint32_t pageID);
 
     // Allocate a new Page via FileManager
-    uint32_t allocatePage();
+    uint32_t allocatePage();    
 
     // Mark page as dirty ( modified )
     void markDirty(uint32_t pageID);

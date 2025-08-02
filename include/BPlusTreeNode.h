@@ -35,17 +35,38 @@ public:
     bool isLeaf() const;
     void setLeaf(bool leaf);
 
-    int numKeys() const;
+    int getNumKeys() const;
     void setNumKeys(int n);
+
+    int getNumValues() const;
+    void setNumValues(int values);
 
     int getKey(int idx) const;
     void setKey(int idx, int key);
 
+    // Only for Internal Nodes
     uint64_t getPointer(int idx) const;
     void setPointer(int idx, uint64_t ptr);
 
+    // Only for Leaf Nodes
+    uint64_t getValue(int idx) const;
+    void setValue(int idx, uint64_t value);
+    
+
     uint32_t getNextLeaf() const;
     void setNextLeaf(uint32_t pageID);
+
+    int findKeyIndex(int key) const;
+
+    void removeKeyAt(int idx);
+    void removeValueAt(int idx);
+    void removePointerAt(int idx);
+
+
+    void insertKeyAt(int idx, int key);
+    void insertValueAt(int idx, uint64_t value);
+    void insertPointerAt(int idx, uint64_t ptr);
+
 
 private:
     Page& m_Page;

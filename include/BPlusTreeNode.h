@@ -17,60 +17,55 @@
 
 */
 
-constexpr size_t NODE_TYPE_OFFSET      = 0;            // PageType (2 bytes)
-constexpr size_t NODE_NUM_KEYS_OFFSET  = 2;            // uint16_t numKeys (2 bytes)
+constexpr size_t NODE_TYPE_OFFSET = 0;            // PageType (2 bytes)
+constexpr size_t NODE_NUM_KEYS_OFFSET = 2;            // uint16_t numKeys (2 bytes)
 constexpr size_t NODE_NEXT_LEAF_OFFSET = 4;            // uint32_t nextLeaf (4 bytes, only if leaf)
-constexpr size_t NODE_HEADER_SIZE_LEAF   = 8;          // 2 + 2 + 4
-constexpr size_t NODE_HEADER_SIZE_INTERNAL = 4;        // 2 + 2
+constexpr size_t NODE_HEADER_SIZE_LEAF = 8;            // 2 + 2 + 4
+constexpr size_t NODE_HEADER_SIZE_INTERNAL = 4;            // 2 + 2
 
 static constexpr int MAX_KEYS = 31;
-static constexpr int MAX_PTRS_INTERNAL = MAX_KEYS + 1;
-static constexpr int MAX_PTRS_LEAF = MAX_KEYS;
+static constexpr int MAX_CHILDREN = MAX_KEYS + 1;
+static constexpr int MAX_VALUES = MAX_KEYS;
 
-class BPlusTreeNode
-{
+class BPlusTreeNode {
 public:
-    BPlusTreeNode(Page& page);
+    explicit BPlusTreeNode(Page& page);
 
+    // Node type
     bool isLeaf() const;
-    void setLeaf(bool leaf);
+    void setLeaf(bool isLeaf);
 
+    // Keys
     int getNumKeys() const;
     void setNumKeys(int n);
-
-    int getNumValues() const;
-    void setNumValues(int values);
-
     int getKey(int idx) const;
     void setKey(int idx, int key);
+    int findKeyIndex(int key) const;
 
-    // Only for Internal Nodes
-    uint64_t getPointer(int idx) const;
-    void setPointer(int idx, uint64_t ptr);
+    void insertKeyAt(int idx, int key);
+    void removeKeyAt(int idx);
 
-    // Only for Leaf Nodes
+    // ====== LEAF NODE API ======
+    int getNumValues() const;  
+    void setNumValues(int);
     uint64_t getValue(int idx) const;
     void setValue(int idx, uint64_t value);
-    
+    void insertValueAt(int idx, uint64_t value);
+    void removeValueAt(int idx);
 
     uint32_t getNextLeaf() const;
     void setNextLeaf(uint32_t pageID);
 
-    int findKeyIndex(int key) const;
-
-    void removeKeyAt(int idx);
-    void removeValueAt(int idx);
-    void removePointerAt(int idx);
-
-
-    void insertKeyAt(int idx, int key);
-    void insertValueAt(int idx, uint64_t value);
-    void insertPointerAt(int idx, uint64_t ptr);
-
+    // ====== INTERNAL NODE API ======
+    int getNumChildren() const; // equals getNumKeys() + 1
+    uint64_t getChild(int idx) const;
+    void setChild(int idx, uint64_t pageID);
+    void insertChildAt(int idx, uint64_t pageID);
+    void removeChildAt(int idx);
 
 private:
     Page& m_Page;
 
     size_t keyOffset() const;
-    size_t ptrOffset() const;
-};  
+    size_t childOffset() const;
+};

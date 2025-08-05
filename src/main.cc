@@ -38,19 +38,19 @@ int main() {
         {70, "Grace"}, /*{80, "Hannah"}, {90, "Ian"},
 		{100, "Jack"}, {110, "Kathy"}, {120, "Leo"}*/
     };
-
-    /*for (auto& [key, value] : kvs) {
+    // === Insert key-value pairs ===
+    for (auto& [key, value] : kvs) {
         uint64_t rid = heap->insert(value);
         bool split = tree->insert(key, rid);
-        if(split) {
+        if (split) {
             std::cout << "Tree split occurred after inserting key: " << key << "\n";
-            cm.updateCollectionMeta(collectionName, 
-                tree->rootPageID(), 
+            cm.updateCollectionMeta(collectionName,
+                tree->rootPageID(),
                 heap->getStartPageID()
-			);
-		}
+            );
+        }
         std::cout << "Inserted: " << key << " => " << value << "\n";
-    }*/
+    }
 
     std::cout << "\nVerifying lookups:\n";
     for (auto& [key, expectedValue] : kvs) {
@@ -61,17 +61,45 @@ int main() {
         assert(actual == expectedValue);
     }
 
+    tree->print();
 
-    std::cout << "\nScan all remaining records:\n";
+    // === Test remove ===
+    std::vector<int> keysToRemove = { 30, 50, 10 }; // Pick keys from different leaf nodes
+    for (int key : keysToRemove) {
+        std::cout << "\nRemoving key: " << key << "\n";
+        bool removed = tree->remove(key);
+        assert(removed);
+
+        std::cout << "\nTree after deleting " << key << ":\n";
+        tree->print();
+
+        auto ridOpt = tree->search(key);
+        std::cout << "Searching for " << key << ": ";
+        assert(!ridOpt.has_value());
+        std::cout << "not found ✅\n";
+    }
+
+    // === Re-verify remaining keys ===
+    std::cout << "\nVerifying remaining keys:\n";
+    for (auto& [key, expectedValue] : kvs) {
+        if (std::find(keysToRemove.begin(), keysToRemove.end(), key) != keysToRemove.end()) continue;
+
+        auto ridOpt = tree->search(key);
+        assert(ridOpt.has_value());
+        std::string actual = heap->get(ridOpt.value());
+        std::cout << key << " -> " << actual << "\n";
+        assert(actual == expectedValue);
+    }
+
+    // === Final tree print ===
+    std::cout << "\nFinal tree structure:\n";
+    tree->print();
+
+    std::cout << "\nHeap scan:\n";
     heap->scan([](uint64_t rid, const std::string& data) {
         std::cout << "RID " << rid << " -> " << data << "\n";
-    });
+        });
 
-	tree->print();
+    std::cout << "\n✅ Deletion tests passed!\n";
 
-    delete tree;
-    delete heap;
-
-    std::cout << "\n✅ All tests passed!\n";
-    return 0;
 }

@@ -25,7 +25,7 @@ void BPlusTree::print() {
             Page& page = m_BufferPool.fetchPage(pageID);
             BPlusTreeNode node(page);
 
-            int n = node.numKeys();
+            int n = node.getNumKeys();
             std::cout << "[Page " << pageID << "] ";
 
             std::cout << (node.isLeaf() ? "(Leaf) " : "(Internal) ");
@@ -38,7 +38,7 @@ void BPlusTree::print() {
             if (!node.isLeaf()) {
                 // Push child pointers to queue
                 for (int j = 0; j <= n; ++j) {
-                    q.push(node.getPointer(j));
+                    q.push(node.getChild(j));
                 }
             }
 

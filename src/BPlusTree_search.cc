@@ -11,14 +11,14 @@ std::optional<uint64_t> BPlusTree::searchInternal(int key, uint32_t pageID)
     Page& page = m_BufferPool.fetchPage(pageID);
     BPlusTreeNode node(page);
 
-    int n = node.numKeys();
+    int n = node.getNumKeys();
 
     if (node.isLeaf())
     {
 
         for (int i = 0; i < n; ++i) {
             if (node.getKey(i) == key) {
-                return node.getPointer(i);  // pointer = value (record ID)
+                return node.getValue(i);  // pointer = value (record ID)
             }
         }
 
@@ -33,6 +33,6 @@ std::optional<uint64_t> BPlusTree::searchInternal(int key, uint32_t pageID)
         }
 
         // Descend into child at index `idx`
-        return searchInternal(key, node.getPointer(idx));
+        return searchInternal(key, node.getChild(idx));
     }
 }

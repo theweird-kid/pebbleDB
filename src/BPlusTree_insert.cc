@@ -19,8 +19,8 @@ bool BPlusTree::insert(int key, uint64_t value) {
         newRoot.setLeaf(false);
         newRoot.setNumKeys(1);
         newRoot.setKey(0, promotedKey);
-        newRoot.setPointer(0, m_RootPageID);
-        newRoot.setPointer(1, newChildPageID);
+        newRoot.setChild(0, m_RootPageID);
+        newRoot.setChild(1, newChildPageID);
 
         m_BufferPool.markDirty(newRootID);
         m_BufferPool.unpinPage(newRootID);
@@ -44,15 +44,10 @@ void BPlusTree::insertInternal(
     while (idx < n && node.getKey(idx) < key)
         idx++;
 
-    if (node.isLeaf()) {
-        // Shift keys and pointers
-        for (int i = n; i > idx; --i) {
-            node.setKey(i, node.getKey(i - 1));
-            node.setPointer(i, node.getPointer(i - 1));
-        }
-
-        node.setKey(idx, key);
-        node.setPointer(idx, value);
+    if (node.isLeaf()) 
+    {
+        node.insertKeyAt(idx, key);
+        node.insertValueAt(idx, value);
         node.setNumKeys(n + 1);
 
         if (node.getNumKeys() > m_Order) {
@@ -61,30 +56,23 @@ void BPlusTree::insertInternal(
             newChildPageID = 0;
         }
     } else {
-        uint32_t childID = node.getPointer(idx);
+        uint32_t childID = node.getChild(idx);
         int childPromotedKey = -1;
         uint32_t childNewPageID = 0;
 
         insertInternal(key, value, childID, childPromotedKey, childNewPageID);
 
         if (childNewPageID != 0) {
-            // Shift keys and pointers
-            for (int i = n; i > idx; --i) {
-                node.setKey(i, node.getKey(i - 1));
-            }
-            for (int i = n + 1; i > idx + 1; --i) {
-                node.setPointer(i, node.getPointer(i - 1));
-            }
-
-            node.setKey(idx, childPromotedKey);
-            node.setPointer(idx + 1, childNewPageID);
+            node.insertKeyAt(idx, childPromotedKey);
+            node.insertChildAt(idx + 1, childNewPageID);
             node.setNumKeys(n + 1);
 
-            if (node.numKeys() > m_Order) {
+            if (node.getNumKeys() > m_Order) {
                 splitInternal(node, pageID, newChildPageID, promotedKey);
             } else {
                 newChildPageID = 0;
             }
+
         } else {
             newChildPageID = 0;
         }
@@ -96,7 +84,7 @@ void BPlusTree::insertInternal(
 
 void BPlusTree::splitLeaf(BPlusTreeNode& node, uint32_t pageID,
                           uint32_t& newLeafPageID, int& newKey) {
-    int total = node.numKeys();
+    int total = node.getNumKeys();
     int mid = total / 2;
 
     newLeafPageID = m_BufferPool.allocatePage();
@@ -109,7 +97,7 @@ void BPlusTree::splitLeaf(BPlusTreeNode& node, uint32_t pageID,
     sibling.setNumKeys(siblingKeys);
     for (int i = 0; i < siblingKeys; ++i) {
         sibling.setKey(i, node.getKey(mid + i));
-        sibling.setPointer(i, node.getPointer(mid + i));
+        sibling.setValue(i, node.getValue(mid + i));
     }
 
     // Update original node
@@ -127,7 +115,7 @@ void BPlusTree::splitLeaf(BPlusTreeNode& node, uint32_t pageID,
 
 void BPlusTree::splitInternal(BPlusTreeNode& node, uint32_t pageID,
                               uint32_t& newPageID, int& newKey) {
-    int total = node.numKeys();
+    int total = node.getNumKeys();
     int mid = total / 2;
     newKey = node.getKey(mid);
 
@@ -141,9 +129,9 @@ void BPlusTree::splitInternal(BPlusTreeNode& node, uint32_t pageID,
 
     for (int i = 0; i < rightKeys; ++i) {
         sibling.setKey(i, node.getKey(mid + 1 + i));
-        sibling.setPointer(i, node.getPointer(mid + 1 + i));
+        sibling.setChild(i, node.getChild(mid + 1 + i));
     }
-    sibling.setPointer(rightKeys, node.getPointer(total));
+    sibling.setChild(rightKeys, node.getChild(total));
 
     node.setNumKeys(mid);
 

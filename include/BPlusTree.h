@@ -11,7 +11,7 @@ class BPlusTree
 {
 public:
     // Constructor for NEW B+Tree
-    BPlusTree(BufferPool& bp, int order = 16)
+    BPlusTree(BufferPool& bp, int order = 4)
         : m_BufferPool(bp), m_Order(order)
     {
         m_MinKeys = std::ceil(order / 2.0) - 1;
@@ -26,7 +26,7 @@ public:
     }
 
     // Constructor for loading an existing B+Tree from a known root
-    BPlusTree(BufferPool& bp, uint32_t rootPageID, int order = 16)
+    BPlusTree(BufferPool& bp, uint32_t rootPageID, int order = 4)
         : m_BufferPool(bp), m_Order(order), m_RootPageID(rootPageID)
     {
         m_MinKeys = std::ceil(order / 2.0) - 1;

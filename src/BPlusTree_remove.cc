@@ -254,4 +254,6 @@ void BPlusTree::mergeNodes(PageID leftID, PageID rightID, BPlusTreeNode& parent,
     m_BufferPool.unpinPage(leftID);
     m_BufferPool.unpinPage(rightID);
 
+    // Free the right Page
+    m_BufferPool.freePage(rightID);
 }

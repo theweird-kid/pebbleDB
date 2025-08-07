@@ -129,3 +129,15 @@ void BufferPool::evictPage()
 
     throw std::runtime_error("No unpinned pages available for eviction");
 }
+
+void BufferPool::freePage(uint32_t pageID)
+{
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
+    // Remove from buffer pool if present
+    m_Pages.erase(pageID);
+    m_LRU.remove(pageID);
+
+    // Free from disk and update freelist
+    m_FileManager.freePage(pageID);
+}

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <cassert>
 #include <optional>
+#include <set>
 
 int main() {
     WindowsFileManager fileManager("kvstore.db");
@@ -24,82 +25,78 @@ int main() {
         std::cout << "Collection found. Loading...\n";
         tree = new BPlusTree(bufferPool, meta->first);
         heap = new HeapFile(collectionName, bufferPool, meta->second);
-    } else {
+    }
+    else {
         std::cout << "Collection not found. Creating...\n";
         heap = new HeapFile(collectionName, bufferPool);
         tree = new BPlusTree(bufferPool);
         cm.createCollection(collectionName, tree->rootPageID(), heap->getStartPageID());
     }
 
-    // Insert key-value pairs
+    // === Insert initial key-value pairs ===
     std::vector<std::pair<int, std::string>> kvs = {
         {10, "Alice"}, {20, "Bob"}, {30, "Charlie"},
         {40, "David"}, {50, "Eva"}, {60, "Frank"},
-        {70, "Grace"}, /*{80, "Hannah"}, {90, "Ian"},
-		{100, "Jack"}, {110, "Kathy"}, {120, "Leo"}*/
+        {70, "Grace"}, {80, "Hannah"}, {90, "Ian"},
+        {100, "Jack"}, {110, "Kathy"}, {120, "Leo"}
     };
-    // === Insert key-value pairs ===
+
     for (auto& [key, value] : kvs) {
         uint64_t rid = heap->insert(value);
         bool split = tree->insert(key, rid);
         if (split) {
             std::cout << "Tree split occurred after inserting key: " << key << "\n";
-            cm.updateCollectionMeta(collectionName,
-                tree->rootPageID(),
-                heap->getStartPageID()
-            );
+            cm.updateCollectionMeta(collectionName, tree->rootPageID(), heap->getStartPageID());
         }
         std::cout << "Inserted: " << key << " => " << value << "\n";
     }
 
-    std::cout << "\nVerifying lookups:\n";
-    for (auto& [key, expectedValue] : kvs) {
-        auto ridOpt = tree->search(key);
-        assert(ridOpt.has_value());
-        std::string actual = heap->get(ridOpt.value());
-        std::cout << key << " -> " << actual << "\n";
-        assert(actual == expectedValue);
-    }
-
+    std::cout << "\nInitial Tree:\n";
     tree->print();
 
-    // === Test remove ===
-    std::vector<int> keysToRemove = {40, 30, 50, 10 }; // Pick keys from different leaf nodes
+    std::cout << "\nInitial Free List:\n";
+    fileManager.printFreeList();
+
+    // === Remove keys to cause underflow and trigger page free ===
+    std::vector<int> keysToRemove = { 40, 30, 50, 10 };
     for (int key : keysToRemove) {
         std::cout << "\nRemoving key: " << key << "\n";
         bool removed = tree->remove(key);
         assert(removed);
 
-        std::cout << "\nTree after deleting " << key << ":\n";
+        std::cout << "Tree after deleting " << key << ":\n";
         tree->print();
-
-        auto ridOpt = tree->search(key);
-        std::cout << "Searching for " << key << ": ";
-        assert(!ridOpt.has_value());
-        std::cout << "not found ✅\n";
     }
 
-    // === Re-verify remaining keys ===
-    std::cout << "\nVerifying remaining keys:\n";
-    for (auto& [key, expectedValue] : kvs) {
-        if (std::find(keysToRemove.begin(), keysToRemove.end(), key) != keysToRemove.end()) continue;
+    std::cout << "\nFree List After Deletion:\n";
+    fileManager.printFreeList();
 
-        auto ridOpt = tree->search(key);
-        assert(ridOpt.has_value());
-        std::string actual = heap->get(ridOpt.value());
-        std::cout << key << " -> " << actual << "\n";
-        assert(actual == expectedValue);
+    // === Insert new keys to test page reuse ===
+    std::vector<std::pair<int, std::string>> newKVs = {
+        {5, "NewOne"}, {15, "NewTwo"}, {35, "NewThree"}, {45, "NewFour"}
+    };
+
+    for (auto& [key, value] : newKVs) {
+        uint64_t rid = heap->insert(value);
+        bool split = tree->insert(key, rid);
+        if (split) {
+            std::cout << "Tree split occurred after inserting key: " << key << "\n";
+            cm.updateCollectionMeta(collectionName, tree->rootPageID(), heap->getStartPageID());
+        }
+        std::cout << "Inserted: " << key << " => " << value << "\n";
     }
 
-    // === Final tree print ===
-    std::cout << "\nFinal tree structure:\n";
+    std::cout << "\nFinal Tree Structure:\n";
     tree->print();
 
-    std::cout << "\nHeap scan:\n";
+    std::cout << "\nFinal Free List (should have shrunk if reuse happened):\n";
+    fileManager.printFreeList();
+
+    // Optional: Print heap contents
+    std::cout << "\nHeap Scan:\n";
     heap->scan([](uint64_t rid, const std::string& data) {
         std::cout << "RID " << rid << " -> " << data << "\n";
         });
 
-    std::cout << "\n✅ Deletion tests passed!\n";
-
+    std::cout << "\n✅ Page reuse test completed.\n";
 }

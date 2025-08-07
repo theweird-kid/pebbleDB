@@ -129,12 +129,15 @@ uint32_t WindowsFileManager::allocatePage()
         // reuse page from freelist
         pageID = m_FreeListHead;
 
+        std::cout << "[PAGE Reused]: " << m_FreeListHead << std::endl;
+
         Page page;
         readPage(pageID, page);
         m_FreeListHead = page.header()->m_NextPageID;
     }
     else
     {
+        std::cout << "[PAGE NEW]: " << m_NextPageID++ << std::endl;
         pageID = m_NextPageID++;
     }
 

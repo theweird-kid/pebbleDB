@@ -68,6 +68,8 @@ public:
     // flush all dirty pages
     void flushAll();
 
+    void freePage(uint32_t pageID);
+
 private:
     IFileManager& m_FileManager;
     size_t m_MaxPages;

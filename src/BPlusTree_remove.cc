@@ -2,31 +2,39 @@
 
 bool BPlusTree::remove(int key)
 {
-    if(m_RootPageID == 0) {
+    if(m_RootPageID == INVALID_PAGE) {
         return false; // Tree is empty
 	}
 
-	bool underflow = removeInternal(key, m_RootPageID, -1, -1, -1, -1);
+    bool deleted{ false };
+	bool rootUnderflow = removeInternal(key, m_RootPageID, deleted);
 
 	Page& rootPage = m_BufferPool.fetchPage(m_RootPageID);
     BPlusTreeNode rootNode(rootPage);
 
-    if(rootNode.getNumKeys() == 0 && !rootNode.isLeaf()) {
-        PageID newRootID = static_cast<PageID>(rootNode.getChild(0));
-        m_RootPageID = newRootID;
+    if(rootNode.getNumKeys() == 0) {
+        if (!rootNode.isLeaf()) {
+            // Promote first child as new root
+            PageID newRootID = rootNode.getChild(0);
+            m_RootPageID = newRootID;
+        }
+        else
+        {
+            // Tree is now empty
+            m_RootPageID = INVALID_PAGE;
+        }
 	}
 
+    m_BufferPool.markDirty(m_RootPageID);
     m_BufferPool.unpinPage(m_RootPageID);
-    return true;
+
+    return deleted;
 }
 
 bool BPlusTree::removeInternal(
     int key, 
     PageID nodeID,
-    PageID parentID,
-    int parentIdx,
-	PageID leftSiblingID,
-	PageID rightSiblingID
+    bool& deleted
 )
 {
     Page& nodePage = m_BufferPool.fetchPage(nodeID);
@@ -35,305 +43,215 @@ bool BPlusTree::removeInternal(
     // ===== LEAF NODE =====
     if (node.isLeaf())
     {
-        // Find and remove the key:value pair
         int idx = node.findKeyIndex(key);
-        if (idx == -1) return false;        // No changes
+        if (idx < 0 || node.getKey(idx) != key) {
+            deleted = false;
+            return false;       // key not found
+        }
 
-        node.removeKeyAt(idx);      // erase key
-        node.removeValueAt(idx);    // erase value
+        node.removeKeyAt(idx);
+        node.removeValueAt(idx);
 
-        // Check and rebalance if required
-        if (node.getNumKeys() >= m_MinKeys) {
+        node.setNumKeys(node.getNumKeys() - 1);
+        deleted = true;
+
+        m_BufferPool.markDirty(nodeID);
+        m_BufferPool.unpinPage(nodeID);
+        return node.getNumKeys() < m_MinKeys;
+    }
+            
+    // ====== INTERNAL NODE ======
+    int idx = node.findChildIndex(key);
+    PageID childID = node.getChild(idx);
+    bool childDeleted = false;
+    bool childUnderflow = removeInternal(key, childID, childDeleted);
+    deleted = childDeleted;
+
+    if (!childUnderflow)
+        return false;
+
+    // Handle Underflow
+    PageID leftSiblingID = (idx > 0) ? node.getChild(idx - 1) : INVALID_PAGE;
+    PageID rightSiblingID = (idx < node.getNumKeys()) ? node.getChild(idx + 1) : INVALID_PAGE;
+
+    Page& childPage = m_BufferPool.fetchPage(childID);
+    BPlusTreeNode childNode(childPage);
+
+    // TRY: Borrow from Left Sibling
+    if (leftSiblingID != INVALID_PAGE)
+    {
+        Page& leftPage = m_BufferPool.fetchPage(leftSiblingID);
+        BPlusTreeNode leftNode(leftPage);
+
+        if (leftNode.getNumKeys() > m_MinKeys)
+        {
+            if (childNode.isLeaf()) {
+                // Move Last key from left to front of the child
+                int borrowKey = leftNode.getKey(leftNode.getNumKeys() - 1);
+                int borrowVal = leftNode.getValue(leftNode.getNumValues() - 1);
+
+                leftNode.removeKeyAt(leftNode.getNumKeys() - 1);
+                leftNode.removeValueAt(leftNode.getNumKeys() - 1);
+                leftNode.setNumKeys(leftNode.getNumKeys() - 1);
+
+                childNode.insertKeyAt(0, borrowKey);
+                childNode.insertValueAt(0, borrowVal);
+                childNode.setNumKeys(childNode.getNumKeys() + 1);
+
+                node.setKey(idx - 1, borrowKey);
+            }
+            else
+            {
+                int separator = node.getKey(idx - 1);
+                int borrowKey = leftNode.getKey(leftNode.getNumKeys() - 1);
+                PageID borrowChild = leftNode.getChild(leftNode.getNumKeys());
+
+                leftNode.setNumKeys(leftNode.getNumKeys() - 1);
+
+                childNode.insertKeyAt(0, separator);
+                childNode.insertChildAt(0, borrowChild);
+                childNode.setNumKeys(childNode.getNumKeys() + 1);
+
+                node.setKey(idx - 1, borrowKey);
+            }
+
+            m_BufferPool.markDirty(childID);
+            m_BufferPool.markDirty(nodeID);
+            m_BufferPool.markDirty(leftSiblingID);
+            
+            m_BufferPool.unpinPage(childID);
             m_BufferPool.unpinPage(nodeID);
+            m_BufferPool.unpinPage(leftSiblingID);
+
             return false;
         }
-            
-        // Borrow from left Sibling
-        if (leftSiblingID != -1) {
-            Page& leftPage = m_BufferPool.fetchPage(leftSiblingID); // [REMEMBER] markDirty and unpin
-            BPlusTreeNode leftSibling(leftPage);
-            if (leftSibling.getNumKeys() > m_MinKeys) {
-                borrowFromLeft(nodeID, leftSiblingID, parentID, parentIdx);
-                m_BufferPool.markDirty(leftSiblingID);
-                m_BufferPool.unpinPage(leftSiblingID);
-                return false;
-            }
-            m_BufferPool.unpinPage(leftSiblingID);
-        }
+    }
 
-        // Borrow from right Sibling
-        if (rightSiblingID != -1) {
-            Page& rightPage = m_BufferPool.fetchPage(rightSiblingID);   // [REMEMBER] markDirty and unpin
-            BPlusTreeNode rightSibling(rightPage);
-            if (rightSibling.getNumKeys() > m_MinKeys) {
-                borrowFromRight(nodeID, rightSiblingID, parentID, parentIdx);
-                m_BufferPool.markDirty(rightSiblingID);
-                m_BufferPool.unpinPage(rightSiblingID);
-                return false;
+    // TRY: Borrow from right Sibling
+    if (rightSiblingID != INVALID_PAGE)
+    {
+        Page& rightPage = m_BufferPool.fetchPage(rightSiblingID);
+        BPlusTreeNode rightNode(rightPage);
+
+        if (rightNode.getNumKeys() > m_MinKeys)
+        {
+            if (childNode.isLeaf())
+            {
+                int borrowKey = rightNode.getKey(0);
+                int borrowVal = rightNode.getValue(0);
+
+                rightNode.removeKeyAt(0);
+                rightNode.removeValueAt(0);
+                rightNode.setNumKeys(rightNode.getNumKeys() - 1);
+
+                childNode.insertKeyAt(childNode.getNumKeys(), borrowKey);
+                childNode.insertValueAt(childNode.getNumKeys(), borrowVal);
+                childNode.setNumKeys(childNode.getNumKeys() + 1);
+
+                node.setKey(idx, rightNode.getKey(0));
             }
+            else
+            {
+                int separator = node.getKey(idx);
+                int borrowKey = rightNode.getKey(0);
+                PageID borrowChild = rightNode.getChild(0);
+
+                rightNode.removeKeyAt(0);
+                rightNode.removeChildAt(0);
+                rightNode.setNumKeys(rightNode.getNumKeys() - 1);
+
+                childNode.insertKeyAt(childNode.getNumKeys(), separator);
+                childNode.insertChildAt(childNode.getNumKeys() + 1, borrowChild);
+                childNode.setNumKeys(childNode.getNumKeys() + 1);
+
+                node.setKey(idx, borrowKey);
+            }
+
+            m_BufferPool.markDirty(childID);
+            m_BufferPool.markDirty(nodeID);
+            m_BufferPool.markDirty(rightSiblingID);
+
+            m_BufferPool.unpinPage(childID);
+            m_BufferPool.unpinPage(nodeID);
             m_BufferPool.unpinPage(rightSiblingID);
-        }
 
-        // MERGE if can't borrow
-        if (leftSiblingID != -1)
-        {
-            mergeWithSibling(leftSiblingID, nodeID, parentID, parentIdx-1);
+            return false;
         }
-        else if (rightSiblingID != -1)
-        {
-            mergeWithSibling(nodeID, rightSiblingID, parentID, parentIdx);
-        }
+    }
 
+    // Merge with Sibling
+    if (leftSiblingID != INVALID_PAGE) {
+        mergeNodes(leftSiblingID, childID, node, idx - 1);
+
+        m_BufferPool.markDirty(childID);
         m_BufferPool.markDirty(nodeID);
+        m_BufferPool.markDirty(leftSiblingID);
+
+        m_BufferPool.unpinPage(childID);
         m_BufferPool.unpinPage(nodeID);
+        m_BufferPool.unpinPage(leftSiblingID);
 
-        return true;
+        return node.getNumKeys() < m_MinKeys;
     }
-    else  
-    {
-        // ===== INTERNAL NODE =====
-        
-        // Find the idx where key occurs
-        int idx = 0;
-        while (idx < node.getNumKeys() && node.getKey(idx) <= key) {
-            idx++;
-        }
+    else if (rightSiblingID != INVALID_PAGE) {
+        mergeNodes(childID, rightSiblingID, node, idx);
 
-        // Search in the child
-        PageID childID = node.getChild(idx);
-        PageID leftChildID = (idx > 0) ? node.getChild(idx - 1) : -1;
-        PageID rightChildID = (idx + 1 < node.getNumValues()) ? node.getChild(idx + 1) : -1;
-
-        bool childUnderflow = removeInternal(key, childID, nodeID, idx, leftChildID, rightChildID);
-
-        // After child deletion, check if *this* node now underflows
-        if (node.getNumKeys() >= m_MinKeys) {
-            return false;   // this node is still ok
-        }
-
-        // If this node underflows -> try to fix
-        if (leftSiblingID != -1) {
-            Page& leftPage = m_BufferPool.fetchPage(leftSiblingID); // [REMEMBER] markDirty and unpin
-            BPlusTreeNode leftSibling(leftPage);
-            if (leftSibling.getNumKeys() > m_MinKeys) {
-                borrowFromLeft(nodeID, leftSiblingID, parentID, parentIdx);
-                m_BufferPool.markDirty(leftSiblingID);
-                m_BufferPool.unpinPage(leftSiblingID);
-                return false;
-            }
-            m_BufferPool.unpinPage(leftSiblingID);
-        }
-
-        if (rightSiblingID != -1) {
-            Page& rightPage = m_BufferPool.fetchPage(rightSiblingID);   // [REMEMBER] markDirty and unpin
-            BPlusTreeNode rightSibling(rightPage);
-            if (rightSibling.getNumKeys() > m_MinKeys) {
-                borrowFromRight(nodeID, rightSiblingID, parentID, parentIdx);
-                m_BufferPool.markDirty(rightSiblingID);
-                m_BufferPool.unpinPage(rightSiblingID);
-                return false;
-            }
-            m_BufferPool.unpinPage(rightSiblingID);
-        }
-
-        // MERGE if can't borrow
-        if (leftSiblingID != -1)
-        {
-            mergeWithSibling(leftSiblingID, nodeID, parentID, parentIdx-1);
-        }
-        else if (rightSiblingID != -1)
-        {
-            mergeWithSibling(nodeID, rightSiblingID, parentID, parentIdx);
-        }
-
+        m_BufferPool.markDirty(childID);
         m_BufferPool.markDirty(nodeID);
+        m_BufferPool.markDirty(rightSiblingID);
+
+        m_BufferPool.unpinPage(childID);
         m_BufferPool.unpinPage(nodeID);
+        m_BufferPool.unpinPage(rightSiblingID);
 
-        // propagate underflow
-        return true;
+        return node.getNumKeys() < m_MinKeys;
     }
+
+    return false;
 }
 
-void BPlusTree::borrowFromLeft(
-    PageID nodeID, 
-    PageID leftSiblingID,
-    PageID parentID, int parentIdx
-)
-{
-    Page& nodePage = m_BufferPool.fetchPage(nodeID);
-    BPlusTreeNode node(nodePage);
 
-    Page& leftPage = m_BufferPool.fetchPage(leftSiblingID);
-    BPlusTreeNode leftSibling(leftPage);
+void BPlusTree::mergeNodes(PageID leftID, PageID rightID, BPlusTreeNode& parent, int separatorIdx) {
+    Page& leftPage = m_BufferPool.fetchPage(leftID);
+    Page& rightPage = m_BufferPool.fetchPage(rightID);
 
-    Page& parentPage = m_BufferPool.fetchPage(parentID);
-    BPlusTreeNode parent(parentPage);
+    BPlusTreeNode left(leftPage);
+    BPlusTreeNode right(rightPage);
 
-    if (node.isLeaf())
-    {
-        // Move the largest key:value from left sibling to node
-        int borrowedKey = leftSibling.getKey(leftSibling.getNumKeys() - 1);
-        int borrowedValue = leftSibling.getValue(leftSibling.getNumValues() - 1); 
-
-        // Remove from left Sibling
-        leftSibling.removeKeyAt(leftSibling.getNumKeys() - 1);
-        leftSibling.removeValueAt(leftSibling.getNumValues() - 1);
-
-        // Insert at front of node
-        node.insertKeyAt(0, borrowedKey);
-        node.insertValueAt(0, borrowedValue);
-
-        // Update Parent's separator key
-        parent.setKey(parentIdx - 1, node.getKey(0));
-    }
-    else
-    {
-        // Bring down parent's separator key
-        int parentKey = parent.getKey(parentIdx - 1);
-        node.insertKeyAt(0, parentKey);
-
-        // Move last child pointer from left Sibling to front of node
-        uint64_t borrowedChild = leftSibling.getChild(leftSibling.getNumKeys());
-        node.insertChildAt(0, borrowedChild);
-
-        // update parent key with left sibling's last key
-        int newParentKey = leftSibling.getKey(leftSibling.getNumKeys() - 1);
-        parent.setKey(parentIdx - 1, newParentKey);
-
-        // Remove from left sibling
-        leftSibling.removeKeyAt(leftSibling.getNumKeys() - 1);
-        leftSibling.removeChildAt(leftSibling.getNumValues()-1);
-    }
-
-    m_BufferPool.markDirty(nodeID);
-    m_BufferPool.markDirty(leftSiblingID);
-    m_BufferPool.markDirty(parentID);
-
-    m_BufferPool.unpinPage(nodeID);
-    m_BufferPool.unpinPage(leftSiblingID);
-    m_BufferPool.unpinPage(parentID);
-}
-
-void BPlusTree::borrowFromRight(
-    PageID nodeID, 
-    PageID rightSiblingID,
-    PageID parentID, int parentIdx
-)
-{
-    Page& nodePage = m_BufferPool.fetchPage(nodeID);
-    BPlusTreeNode node(nodePage);
-
-    Page& rightPage = m_BufferPool.fetchPage(rightSiblingID);
-    BPlusTreeNode rightSibling(rightPage);
-
-    Page& parentPage = m_BufferPool.fetchPage(parentID);
-    BPlusTreeNode parent(parentPage);
-
-    if (node.isLeaf())
-    {
-        // Move the smallest key:value pair from right Sibling to node
-        int borrowedKey = rightSibling.getKey(0);
-        int borrowedValue = rightSibling.getValue(0);
-
-        // Remove from right Sibling
-        rightSibling.removeKeyAt(0);
-        rightSibling.removeValueAt(0);
-
-        // Insert at the end of the node
-        node.insertKeyAt(node.getNumKeys(), borrowedKey);
-        node.insertValueAt(node.getNumValues(), borrowedValue);
-
-        // Update Parent's separator key to new first key of right Sibling
-        if (rightSibling.getNumKeys() > 0)
-            parent.setKey(parentIdx, rightSibling.getKey(0));
-    }
-    else
-    {
-        // Bring down parent's separator key into node
-        int parentKey = parent.getKey(parentIdx);
-        node.insertKeyAt(node.getNumKeys(), parentKey);
-
-        // Bring over the first child pointer from right Sibling
-        uint64_t borrowedChild = rightSibling.getChild(0);
-        node.insertChildAt(node.getNumValues(), borrowedChild);
-
-        // Update parent's key with right Sibling's first key
-        int newParentKey = rightSibling.getKey(0);
-        parent.setKey(parentIdx, newParentKey);
-
-        // Remove borrowed key and pointer from right sibling
-        rightSibling.removeKeyAt(0);
-        rightSibling.removeChildAt(0);
-    }
-
-    m_BufferPool.markDirty(nodeID);
-    m_BufferPool.markDirty(rightSiblingID);
-    m_BufferPool.markDirty(parentID);
-
-    m_BufferPool.unpinPage(nodeID);
-    m_BufferPool.unpinPage(rightSiblingID);
-    m_BufferPool.unpinPage(parentID);
-}
-
-void BPlusTree::mergeWithSibling(
-    PageID leftNodeID,
-    PageID rightNodeID,
-    PageID parentID, int parentIdx
-) {
-    Page& leftPage = m_BufferPool.fetchPage(leftNodeID);
-    BPlusTreeNode leftNode(leftPage);
-
-    Page& rightPage = m_BufferPool.fetchPage(rightNodeID);
-    BPlusTreeNode rightNode(rightPage);
-
-    Page& parentPage = m_BufferPool.fetchPage(parentID);
-    BPlusTreeNode parent(parentPage);
-
-    if (leftNode.isLeaf()) {
-        // Move all key-value pairs from right to left
-        for (int i = 0; i < rightNode.getNumKeys(); ++i) {
-            int key = rightNode.getKey(i);
-            uint64_t val = rightNode.getValue(i);
-
-            leftNode.insertKeyAt(leftNode.getNumKeys(), key);
-            leftNode.insertValueAt(leftNode.getNumValues(), val);
+    if (left.isLeaf()) {
+        // Append all keys and values from right to left
+        for (int i = 0; i < right.getNumKeys(); ++i) {
+            left.insertKeyAt(left.getNumKeys(), right.getKey(i));
+            left.insertValueAt(left.getNumKeys(), right.getValue(i));
+            left.setNumKeys(left.getNumKeys() + 1);
         }
-
-        // Update leaf link pointer
-        leftNode.setNextLeaf(rightNode.getNextLeaf());
-
-        // Remove separator key and rightNode pointer from parent
-        parent.removeKeyAt(parentIdx);
-        parent.removeChildAt(parentIdx + 1);
-
-        // TODO: deallocate rightNodeID using a freelist
     }
     else {
-        // Insert parent separator key to left node
-        int sepKey = parent.getKey(parentIdx);
-        leftNode.insertKeyAt(leftNode.getNumKeys(), sepKey);
+        // Append separator key from parent
+        left.insertKeyAt(left.getNumKeys(), parent.getKey(separatorIdx));
+        left.setNumKeys(left.getNumKeys() + 1);
 
-        // Move all keys and children from right to left
-        int rightKeys = rightNode.getNumKeys();
-        for (int i = 0; i < rightKeys; ++i) {
-            leftNode.insertKeyAt(leftNode.getNumKeys(), rightNode.getKey(i));
+        // Append all keys and children from right
+        for (int i = 0; i < right.getNumKeys(); ++i) {
+            left.insertKeyAt(left.getNumKeys(), right.getKey(i));
+            left.setNumKeys(left.getNumKeys() + 1);
         }
-
-        for (int i = 0; i < rightNode.getNumValues(); ++i) {
-            leftNode.insertChildAt(leftNode.getNumValues(), rightNode.getChild(i));
+        for (int i = 0; i <= right.getNumKeys(); ++i) {
+            left.insertChildAt(left.getNumKeys(), right.getChild(i));
         }
-
-        // Remove separator key and rightNode pointer from parent
-        parent.removeKeyAt(parentIdx);
-        parent.removeChildAt(parentIdx + 1);
-
-        // TODO: deallocate rightNodeID
     }
-    m_BufferPool.markDirty(leftNodeID);
-    m_BufferPool.markDirty(rightNodeID);
-    m_BufferPool.markDirty(parentID);
 
-    m_BufferPool.unpinPage(leftNodeID);
-    m_BufferPool.unpinPage(rightNodeID);
-    m_BufferPool.unpinPage(parentID);
+    // Remove separator from parent
+    parent.removeKeyAt(separatorIdx);
+    parent.removeChildAt(separatorIdx + 1);
+    parent.setNumKeys(parent.getNumKeys() - 1);
+
+    // Mark dirty
+    m_BufferPool.markDirty(leftID);
+    m_BufferPool.markDirty(rightID);
+
+    // Unpin
+    m_BufferPool.unpinPage(leftID);
+    m_BufferPool.unpinPage(rightID);
+
 }

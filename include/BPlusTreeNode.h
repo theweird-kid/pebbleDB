@@ -27,6 +27,8 @@ static constexpr int MAX_KEYS = 31;
 static constexpr int MAX_CHILDREN = MAX_KEYS + 1;
 static constexpr int MAX_VALUES = MAX_KEYS;
 
+constexpr PageID INVALID_PAGE = -1;
+
 class BPlusTreeNode {
 public:
     explicit BPlusTreeNode(Page& page);
@@ -40,14 +42,15 @@ public:
     void setNumKeys(int n);
     int getKey(int idx) const;
     void setKey(int idx, int key);
+
     int findKeyIndex(int key) const;
+    int findChildIndex(int key) const;
 
     void insertKeyAt(int idx, int key);
     void removeKeyAt(int idx);
 
     // ====== LEAF NODE API ======
     int getNumValues() const;  
-    void setNumValues(int);
     uint64_t getValue(int idx) const;
     void setValue(int idx, uint64_t value);
     void insertValueAt(int idx, uint64_t value);

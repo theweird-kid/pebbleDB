@@ -64,7 +64,7 @@ int main() {
     tree->print();
 
     // === Test remove ===
-    std::vector<int> keysToRemove = { 30, 50, 10 }; // Pick keys from different leaf nodes
+    std::vector<int> keysToRemove = {40, 30, 50, 10 }; // Pick keys from different leaf nodes
     for (int key : keysToRemove) {
         std::cout << "\nRemoving key: " << key << "\n";
         bool removed = tree->remove(key);

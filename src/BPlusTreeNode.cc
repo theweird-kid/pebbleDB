@@ -26,15 +26,6 @@ int BPlusTreeNode::getNumValues() const {
     return isLeaf() ? getNumKeys() : getNumKeys() + 1;
 }
 
-void BPlusTreeNode::setNumValues(int values) {
-    if (isLeaf()) {
-        setNumKeys(values);
-    }
-    else {
-        setNumKeys(values - 1);
-    }
-}
-
 int BPlusTreeNode::getKey(int idx) const {
     if (idx < 0 || idx >= getNumKeys()) 
         throw std::out_of_range("Key index out of range");
@@ -77,33 +68,20 @@ void BPlusTreeNode::setChild(int idx, uint64_t ptr) {
 }
 
 void BPlusTreeNode::insertChildAt(int idx, uint64_t ptr) {
-    if (isLeaf()) 
-        throw std::runtime_error("Leaf nodes do not have children");
-
-    int n = getNumChildren();
-    if (idx < 0 || idx > n || n >= MAX_CHILDREN) 
-        throw std::out_of_range("Invalid child insert index");
-
-    for (int i = n - 1; i >= idx; --i) 
+    for (int i = getNumKeys(); i >= idx; --i)
         setChild(i + 1, getChild(i));
 
     setChild(idx, ptr);
-    setNumValues(n + 1);
 }
+
 
 void BPlusTreeNode::removeChildAt(int idx) {
-    if (isLeaf()) 
-        throw std::runtime_error("Leaf nodes do not have children");
-
-    int n = getNumChildren();
-    if (idx < 0 || idx >= n) 
-        throw std::out_of_range("Invalid child remove index");
-
-    for (int i = idx + 1; i < n; ++i) 
+    for (int i = idx + 1; i <= getNumKeys(); ++i)
         setChild(i - 1, getChild(i));
 
-    setNumValues(n - 1);
+    setChild(getNumKeys(), 0);
 }
+
 
 uint64_t BPlusTreeNode::getValue(int idx) const {
     if (!isLeaf()) throw std::runtime_error("Only leaf nodes hold values");
@@ -120,20 +98,18 @@ void BPlusTreeNode::setValue(int idx, uint64_t value) {
 }
 
 void BPlusTreeNode::insertValueAt(int idx, uint64_t value) {
-    if (!isLeaf()) throw std::runtime_error("Only leaf nodes hold values");
-    int n = getNumValues();
-    if (idx < 0 || idx > n || n >= MAX_VALUES) throw std::out_of_range("Invalid value insert index");
-    for (int i = n - 1; i >= idx; --i) setValue(i + 1, getValue(i));
+    for (int i = getNumKeys() - 1; i >= idx; --i)
+        setValue(i + 1, getValue(i));
     setValue(idx, value);
-    setNumValues(n + 1);
 }
 
 void BPlusTreeNode::removeValueAt(int idx) {
-    if (!isLeaf()) throw std::runtime_error("Only leaf nodes hold values");
-    int n = getNumValues();
-    for (int i = idx + 1; i < n; ++i) setValue(i - 1, getValue(i));
-    setNumValues(n - 1);
+    for (int i = idx + 1; i < getNumKeys(); ++i)
+        setValue(i - 1, getValue(i));
+
+    setValue(getNumKeys() - 1, 0);
 }
+
 
 uint32_t BPlusTreeNode::getNextLeaf() const {
     if (!isLeaf()) throw std::runtime_error("Not a leaf node");
@@ -151,18 +127,26 @@ int BPlusTreeNode::findKeyIndex(int key) const {
     return -1;
 }
 
-void BPlusTreeNode::insertKeyAt(int idx, int key) {
-    int n = getNumKeys();
-    if (idx < 0 || idx > n || n >= MAX_KEYS) throw std::out_of_range("Invalid key insert index");
-    for (int i = n - 1; i >= idx; --i) setKey(i + 1, getKey(i));
-    setKey(idx, key);
-    setNumKeys(n + 1);
+int BPlusTreeNode::findChildIndex(int key) const {
+    int i = 0;
+    while (i < getNumKeys() && key >= getKey(i)) {
+        ++i;
+    }
+    return i; // returns index of child to follow
 }
+
+
+void BPlusTreeNode::insertKeyAt(int idx, int key) {
+    for (int i = getNumKeys() - 1; i >= idx; --i)
+        setKey(i + 1, getKey(i));
+
+    setKey(idx, key);
+}
+
 
 void BPlusTreeNode::removeKeyAt(int idx) {
     int n = getNumKeys();
     for (int i = idx + 1; i < n; ++i) setKey(i - 1, getKey(i));
-    setNumKeys(n - 1);
 }
 
 size_t BPlusTreeNode::keyOffset() const {

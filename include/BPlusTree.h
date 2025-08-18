@@ -61,14 +61,7 @@ private:
     // Recursive helper for remove
     bool removeInternal(int key, PageID nodeID, bool& deleted);
 
-    // Redistribution helpers
-    void borrowFromLeft(PageID node, PageID leftSibling, PageID parent, int parentIdx);
-
-    void borrowFromRight(PageID node, PageID rightSibling, PageID parent, int parentIdx);
-
     // Merge helper
-    void mergeWithSibling(PageID leftNode, PageID rightNode, PageID parent, int parentIdx);
-
     void mergeNodes(PageID leftID, PageID rightID, BPlusTreeNode& parent, int separatorIdx);
 
 

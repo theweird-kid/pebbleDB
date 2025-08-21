@@ -26,7 +26,7 @@ public:
 
 private:
     std::string m_Name;
-    uint32_t m_StartePageID;
+    uint32_t m_StartPageID;
     BufferPool& m_BufferPool;
     std::vector<uint32_t> m_Pages;
 

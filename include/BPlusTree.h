@@ -33,6 +33,12 @@ public:
         // Do NOT allocate a new page
         // Do NOT overwrite the root page
         // Just load the tree rooted at rootPageID
+        Page& page = m_BufferPool.fetchPage(m_RootPageID);
+        BPlusTreeNode rootNode(page);
+        rootNode.setLeaf(true);
+
+        m_BufferPool.markDirty(m_RootPageID);
+        m_BufferPool.unpinPage(m_RootPageID);
     }
 
     bool insert(int key, uint64_t value);                 // Insert key:value pair

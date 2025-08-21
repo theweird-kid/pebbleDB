@@ -46,7 +46,7 @@ void WindowsFileManager::loadMetaPage()
     if(!ReadFile(m_FileHandle, &meta, sizeof(meta), &bytesRead, nullptr) || bytesRead != sizeof(MetaData)) 
     {
         // File is empty, initialize meta page
-        this->m_NextPageID = 1;
+        this->m_NextPageID = 2;
         this->m_FreeListHead = 0;
         updateMetaPage();
     }
@@ -129,16 +129,16 @@ uint32_t WindowsFileManager::allocatePage()
         // reuse page from freelist
         pageID = m_FreeListHead;
 
-        std::cout << "[PAGE Reused]: " << m_FreeListHead << std::endl;
-
         Page page;
         readPage(pageID, page);
         m_FreeListHead = page.header()->m_NextPageID;
+
+        std::cout << "[PAGE Reused]: " << pageID << std::endl;
     }
     else
     {
-        std::cout << "[PAGE NEW]: " << m_NextPageID++ << std::endl;
         pageID = m_NextPageID++;
+        std::cout << "[PAGE NEW]: " << pageID << std::endl;
     }
 
     // Create a blank page and write it to disk
@@ -154,6 +154,13 @@ uint32_t WindowsFileManager::allocatePage()
 void WindowsFileManager::freePage(uint32_t pageID)
 {
     std::lock_guard<std::recursive_mutex> lock(m_RecMutex);
+
+    // Guard: never free reserved pages
+    if (pageID < 2) {
+        // either ignore or throw — I’d assert in debug:
+        // throw std::runtime_error("Attempted to free reserved page");
+        return;
+    }
 
     Page page;
     page.setPageID(pageID);

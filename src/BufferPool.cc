@@ -13,20 +13,13 @@ BufferPool::~BufferPool()
 Page& BufferPool::fetchPage(uint32_t pageID)
 {   
     std::lock_guard<std::mutex> lock(m_Mutex);
-
-	// META PAGE
-    if (pageID == 0) {
-        if(!m_FileManager.pageExists(pageID)) {
-			allocatePage();
-		}
-    }
     
-	// CATALOG PAGE
-    if(pageID == 1) {
-        if(!m_FileManager.pageExists(pageID)) {
-			allocatePage();  // Ensure Catalog page exists
-		}
-	}
+	// CATALOG PAGE : ensure catalog page (1) exists
+    if (pageID == 1 && !m_FileManager.pageExists(1)) {
+        Page cat;
+        cat.setPageID(1);
+        m_FileManager.writePage(cat); // direct write, no allocatePage()
+    }
 
     auto it = m_Pages.find(pageID);
     if(it != m_Pages.end())         // Page found in memory

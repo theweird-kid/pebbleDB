@@ -3,7 +3,7 @@
 #include <iostream>
 
 HeapFile::HeapFile(const std::string& name, BufferPool& bp, uint32_t startPageID)
-	: m_Name(name), m_BufferPool(bp), m_StartePageID(startPageID)
+	: m_Name(name), m_BufferPool(bp), m_StartPageID(startPageID)
 {
     if (startPageID == 0 || startPageID == static_cast<uint32_t>(-1)) {
         throw std::invalid_argument("Invalid startPageID for HeapFile");
@@ -25,7 +25,7 @@ HeapFile::HeapFile(const std::string& name, BufferPool& bp)
     uint32_t pageID = m_BufferPool.allocatePage();
     Page& page = m_BufferPool.fetchPage(pageID);
 
-	m_StartePageID = pageID;
+	m_StartPageID = pageID;
 
     page.header()->m_Type = PageType::HEAP;
     page.header()->m_PageID = pageID;
@@ -38,7 +38,7 @@ HeapFile::HeapFile(const std::string& name, BufferPool& bp)
 }
 
 uint32_t HeapFile::getStartPageID() const {
-    return m_StartePageID;
+    return m_StartPageID;
 }
 
 uint64_t HeapFile::makeRecordID(uint32_t pageID, uint16_t slotID) const {

@@ -1,6 +1,8 @@
-#include "BPlusTreeNode.h"
+#include "pebble/core/BPlusTreeNode.h"
 #include <cstring>
 #include <stdexcept>
+
+using namespace pebble::core;
 
 BPlusTreeNode::BPlusTreeNode(Page& page)
     : m_Page(page) {

@@ -1,16 +1,18 @@
-#include "HeapFile.h"
+#include "pebble/core/HeapFile.h"
 #include <stdexcept>
 #include <iostream>
 
-HeapFile::HeapFile(const std::string& name, BufferPool& bp, uint32_t startPageID)
+using namespace pebble::core;
+
+HeapFile::HeapFile(const std::string& name, BufferPool& bp, PageID startPageID)
 	: m_Name(name), m_BufferPool(bp), m_StartPageID(startPageID)
 {
-    if (startPageID == 0 || startPageID == static_cast<uint32_t>(-1)) {
+    if (startPageID == 0 || startPageID == static_cast<PageID>(-1)) {
         throw std::invalid_argument("Invalid startPageID for HeapFile");
     }
 
-    uint32_t curr = startPageID;
-    while (curr != 0 && curr != static_cast<uint32_t>(-1)) {
+    PageID curr = startPageID;
+    while (curr != 0 && curr != static_cast<PageID>(-1)) {
         m_Pages.push_back(curr);
         Page& page = m_BufferPool.fetchPage(curr);
         curr = page.header()->m_NextPageID;
@@ -22,7 +24,7 @@ HeapFile::HeapFile(const std::string& name, BufferPool& bp, uint32_t startPageID
 HeapFile::HeapFile(const std::string& name, BufferPool& bp)
     : m_Name(name), m_BufferPool(bp)
 {
-    uint32_t pageID = m_BufferPool.allocatePage();
+    PageID pageID = m_BufferPool.allocatePage();
     Page& page = m_BufferPool.fetchPage(pageID);
 
 	m_StartPageID = pageID;
@@ -46,12 +48,12 @@ uint64_t HeapFile::makeRecordID(uint32_t pageID, uint16_t slotID) const {
 }
 
 void HeapFile::parseRecordID(uint64_t recordID, uint32_t& pageID, uint16_t& slotID) const {
-    pageID = static_cast<uint32_t>(recordID >> 16);
+    pageID = static_cast<PageID>(recordID >> 16);
     slotID = static_cast<uint16_t>(recordID & 0xFFFF);
 }
 
 uint64_t HeapFile::insert(const std::string& record) {
-    for (uint32_t pageID : m_Pages) {
+    for (PageID pageID : m_Pages) {
         Page& p = m_BufferPool.fetchPage(pageID);
         HeapPage hp(p);
         int slotID = hp.insert(record);
@@ -63,11 +65,11 @@ uint64_t HeapFile::insert(const std::string& record) {
         m_BufferPool.unpinPage(pageID);
     }
 
-    uint32_t newPageID = m_BufferPool.allocatePage();
+    PageID newPageID = m_BufferPool.allocatePage();
     Page& newPage = m_BufferPool.fetchPage(newPageID);
 
     if (!m_Pages.empty()) {
-        uint32_t lastPageID = m_Pages.back();
+        PageID lastPageID = m_Pages.back();
         Page& lastPage = m_BufferPool.fetchPage(lastPageID);
         lastPage.header()->m_NextPageID = newPageID;
         m_BufferPool.markDirty(lastPageID);
@@ -89,7 +91,7 @@ uint64_t HeapFile::insert(const std::string& record) {
 }
 
 bool HeapFile::remove(uint64_t recordID) {
-    uint32_t pageID;
+    PageID pageID;
     uint16_t slotID;
     parseRecordID(recordID, pageID, slotID);
 
@@ -105,7 +107,7 @@ bool HeapFile::remove(uint64_t recordID) {
 }
 
 std::string HeapFile::get(uint64_t recordID) const {
-    uint32_t pageID;
+    PageID pageID;
     uint16_t slotID;
     parseRecordID(recordID, pageID, slotID);
 
@@ -118,7 +120,7 @@ std::string HeapFile::get(uint64_t recordID) const {
 }
 
 void HeapFile::scan(std::function<void(uint64_t, const std::string&)> visitor) const {
-    for (uint32_t pageID : m_Pages) {
+    for (PageID pageID : m_Pages) {
         Page& page = m_BufferPool.fetchPage(pageID);
         HeapPage hp(page);
         hp.scan([&](uint16_t slotID, const std::string& record) {

@@ -1,9 +1,11 @@
-#include "WindowsFileManager.h"
-#include "MetaData.h"
+#include "pebble/core/WindowsFileManager.h"
+#include "pebble/core/MetaData.h"
 
 #include <iostream>
 #include <stdexcept>
 #include <cstring>
+
+using namespace pebble::core;
 
 WindowsFileManager::WindowsFileManager(const std::string& filename)
     : m_Filename(filename)

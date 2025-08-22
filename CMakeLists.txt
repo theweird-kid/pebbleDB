@@ -21,7 +21,7 @@ file(GLOB_RECURSE SOURCES
 # Define the executable
 add_executable(pebble-db
     ${SOURCES}
- "include/StorageEngine.h")
+ "include/pebble/app/StorageEngine.h")
 
 # Add the include/ directory for this target
 target_include_directories(pebble-db

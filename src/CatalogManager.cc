@@ -1,5 +1,7 @@
-#include "CatalogManager.h"
+#include "pebble/core/CatalogManager.h"
 #include <cassert>
+
+using namespace pebble::core;
 
 CatalogManager::CatalogManager(BufferPool& bp)
     : m_BufferPool(bp)
@@ -18,8 +20,8 @@ CatalogManager::CatalogManager(BufferPool& bp)
 
 void CatalogManager::createCollection(
     const std::string& name,
-    uint32_t rootPageID,
-    uint32_t heapStartPageID
+    PageID rootPageID,
+    PageID heapStartPageID
 )
 {
     assert(name.size() < 256);
@@ -34,7 +36,7 @@ void CatalogManager::createCollection(
     saveCatalog(entries);
 }
 
-std::optional<std::pair<uint32_t, uint32_t>> CatalogManager::getCollectionMeta(
+std::optional<std::pair<PageID, PageID>> CatalogManager::getCollectionMeta(
     const std::string& name
 )
 {
@@ -62,13 +64,13 @@ std::vector<CatalogEntry> CatalogManager::loadCatalog() const
         std::string name(ptr, nameLen);
         ptr += nameLen;
 
-        uint32_t rootPageID;
-        std::memcpy(&rootPageID, ptr, 4);
-        ptr += 4;
+        PageID rootPageID;
+        std::memcpy(&rootPageID, ptr, sizeof(PageID));
+        ptr += sizeof(PageID);
 
-        uint32_t heapStartPageID;
-        std::memcpy(&heapStartPageID, ptr, 4);
-        ptr += 4;
+        PageID heapStartPageID;
+        std::memcpy(&heapStartPageID, ptr, sizeof(PageID));
+        ptr += sizeof(PageID);
 
         entries.push_back({ name, rootPageID, heapStartPageID });
     }
@@ -90,11 +92,11 @@ void CatalogManager::saveCatalog(const std::vector<CatalogEntry>& entries) {
         std::memcpy(ptr, entry.name.data(), nameLen);
         ptr += nameLen;
 
-        std::memcpy(ptr, &entry.rootPageID, 4);
-        ptr += 4;
+        std::memcpy(ptr, &entry.rootPageID, sizeof(PageID));
+        ptr += sizeof(PageID);
 
-        std::memcpy(ptr, &entry.heapStartPageID, 4);
-        ptr += 4;
+        std::memcpy(ptr, &entry.heapStartPageID, sizeof(PageID));
+        ptr += sizeof(PageID);
     }
 
     // Zero out the rest of the payload to mark the end
@@ -108,8 +110,8 @@ void CatalogManager::saveCatalog(const std::vector<CatalogEntry>& entries) {
 
 void CatalogManager::updateCollectionMeta(
     const std::string& name,
-    uint32_t newRootPageID,
-    uint32_t newHeapStartPageID
+    PageID newRootPageID,
+    PageID newHeapStartPageID
 )
 {
     auto entries = loadCatalog();

@@ -1,5 +1,7 @@
-#include "BufferPool.h"
+#include "pebble/core/BufferPool.h"
 #include <iostream>
+
+using namespace pebble::core;
 
 BufferPool::BufferPool(IFileManager& fm, size_t poolSize)
     : m_FileManager(fm), m_MaxPages(poolSize)

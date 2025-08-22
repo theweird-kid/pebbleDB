@@ -1,4 +1,6 @@
-#include "BPlusTree.h"
+#include "pebble/core/BPlusTree.h"
+
+using namespace pebble::core;
 
 bool BPlusTree::remove(int key)
 {

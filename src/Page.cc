@@ -1,14 +1,16 @@
-#include "Page.h"
+#include "pebble/core/Page.h"
+
+using namespace pebble::core;
 
 Page::Page() {
     clear();
 }
 
-void Page::setPageID(uint32_t id) {
+void Page::setPageID(PageID id) {
     header()->m_PageID = id;
 }
 
-uint32_t Page::getPageID() const {
+PageID Page::getPageID() const {
     return header()->m_PageID;
 }
 

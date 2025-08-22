@@ -1,5 +1,7 @@
-﻿#include "StorageEngine.h"
+﻿#include "pebble/app/StorageEngine.h"
 #include <iostream>
+
+using namespace pebble::app;
 
 StorageEngine::StorageEngine(const std::string& dbPath, size_t poolSize)
 	: m_FileManager(dbPath), 
@@ -20,16 +22,16 @@ bool StorageEngine::createCollection(const std::string& name) {
 		auto [rootPageID, heapStartPageID] = *meta;
 
 		Collection coll;
-		coll.heap = std::make_unique<HeapFile>(name, m_BufferPool, heapStartPageID);
-		coll.index = std::make_unique<BPlusTree>(m_BufferPool, rootPageID);
+		coll.heap = std::make_unique<pebble::core::HeapFile>(name, m_BufferPool, heapStartPageID);
+		coll.index = std::make_unique<pebble::core::BPlusTree>(m_BufferPool, rootPageID);
 		collections[name] = std::move(coll);
 
 		return false; // means "already existed"
 	}
 	else {
 		// Create fresh
-		auto heap = std::make_unique<HeapFile>(name, m_BufferPool);
-		auto index = std::make_unique<BPlusTree>(m_BufferPool);
+		auto heap = std::make_unique<pebble::core::HeapFile>(name, m_BufferPool);
+		auto index = std::make_unique<pebble::core::BPlusTree>(m_BufferPool);
 
 		uint32_t heapStartPageID = heap->getStartPageID();
 		uint32_t rootPageID = index->rootPageID();
@@ -156,8 +158,8 @@ StorageEngine::Collection* StorageEngine::loadCollection(const std::string& name
 	auto &[rootPage, heapPage] = *metaOpt;
 
 	Collection col;
-	col.index = std::make_unique<BPlusTree>(m_BufferPool, rootPage);
-	col.heap = std::make_unique<HeapFile>(name, m_BufferPool, heapPage);
+	col.index = std::make_unique<pebble::core::BPlusTree>(m_BufferPool, rootPage);
+	col.heap = std::make_unique<pebble::core::HeapFile>(name, m_BufferPool, heapPage);
 
 	collections[name] = std::move(col);
 	return &collections[name];

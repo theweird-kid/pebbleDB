@@ -1,6 +1,9 @@
-#include "BPlusTree.h"
+#include "pebble/core/BPlusTree.h"
+
 #include <queue>
 #include <iostream>
+
+using namespace pebble::core;
 
 void BPlusTree::print() {
     if (m_RootPageID == 0) {
@@ -8,7 +11,7 @@ void BPlusTree::print() {
         return;
     }
 
-    std::queue<uint32_t> q;
+    std::queue<PageID> q;
     q.push(m_RootPageID);
     int level = 0;
 
@@ -19,7 +22,7 @@ void BPlusTree::print() {
         std::cout << "Level " << level << ":\n";
 
         for (int i = 0; i < sz; ++i) {
-            uint32_t pageID = q.front();
+            PageID pageID = q.front();
             q.pop();
 
             Page& page = m_BufferPool.fetchPage(pageID);

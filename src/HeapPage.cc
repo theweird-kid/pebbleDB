@@ -1,8 +1,11 @@
-#include "HeapPage.h"
+#include "pebble/core/HeapPage.h"
+#include "pebble/core/Page.h"
 
 #include <iostream>
 #include <cstdint>
 #include <stdexcept>
+
+using namespace pebble::core;
 
 HeapPage::HeapPage(Page& page)
     : m_Page(page)

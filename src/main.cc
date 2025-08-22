@@ -1,5 +1,7 @@
-#include "StorageEngine.h"
+#include "pebble/app/StorageEngine.h"
 #include <iostream>
+
+using namespace pebble::app;
 
 int main() {
     StorageEngine engine("kvstore.db", 10);

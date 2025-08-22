@@ -1,8 +1,10 @@
-#include "BPlusTree.h"
+#include "pebble/core/BPlusTree.h"
+
+using namespace pebble::core;
 
 bool BPlusTree::insert(int key, uint64_t value) {
     int promotedKey = -1;
-    uint32_t newChildPageID = 0;
+    PageID newChildPageID = 0;
 
     // Duplicate key, insertion failed
     if (search(key).has_value()) {
@@ -12,7 +14,7 @@ bool BPlusTree::insert(int key, uint64_t value) {
     insertInternal(key, value, m_RootPageID, promotedKey, newChildPageID);
 
     if (newChildPageID != 0) {
-        uint32_t newRootID = m_BufferPool.allocatePage();
+        PageID newRootID = m_BufferPool.allocatePage();
         Page& newRootPage = m_BufferPool.fetchPage(newRootID);
         BPlusTreeNode newRoot(newRootPage);
 
@@ -33,8 +35,8 @@ bool BPlusTree::insert(int key, uint64_t value) {
 
 void BPlusTree::insertInternal(
     int key, uint64_t value, 
-    uint32_t pageID,
-    int& promotedKey, uint32_t& newChildPageID
+    PageID pageID,
+    int& promotedKey, PageID& newChildPageID
 ) {
     Page& page = m_BufferPool.fetchPage(pageID);
     BPlusTreeNode node(page);
@@ -56,9 +58,9 @@ void BPlusTree::insertInternal(
             newChildPageID = 0;
         }
     } else {
-        uint32_t childID = node.getChild(idx);
+        PageID childID = node.getChild(idx);
         int childPromotedKey = -1;
-        uint32_t childNewPageID = 0;
+        PageID childNewPageID = 0;
 
         insertInternal(key, value, childID, childPromotedKey, childNewPageID);
 
@@ -82,8 +84,8 @@ void BPlusTree::insertInternal(
     m_BufferPool.unpinPage(pageID);
 }
 
-void BPlusTree::splitLeaf(BPlusTreeNode& node, uint32_t pageID,
-                          uint32_t& newLeafPageID, int& newKey) {
+void BPlusTree::splitLeaf(BPlusTreeNode& node, PageID pageID,
+                          PageID& newLeafPageID, int& newKey) {
     int total = node.getNumKeys();
     int mid = total / 2;
 
@@ -113,8 +115,8 @@ void BPlusTree::splitLeaf(BPlusTreeNode& node, uint32_t pageID,
     newKey = sibling.getKey(0);  // First key in sibling is promoted
 }
 
-void BPlusTree::splitInternal(BPlusTreeNode& node, uint32_t pageID,
-                              uint32_t& newPageID, int& newKey) {
+void BPlusTree::splitInternal(BPlusTreeNode& node, PageID pageID,
+                              PageID& newPageID, int& newKey) {
     int total = node.getNumKeys();
     int mid = total / 2;
     newKey = node.getKey(mid);

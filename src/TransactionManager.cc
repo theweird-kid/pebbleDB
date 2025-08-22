@@ -1,4 +1,7 @@
 //#include "TransactionManager.h"
+//#include "pebble/core/BufferPool.h"
+//
+//using namespace pebble::core;
 //
 //TransactionManager::TransactionManager(WAL& wal, BufferPool& bp)
 //    : m_Wal(wal), m_BufferPool(bp)
@@ -13,7 +16,7 @@
 //    m_Wal.logRecord(LogType::BEGIN, txnID, 0, nullptr, 0);
 //
 //    return txnID;
-//}
+//}Q
 //
 //void TransactionManager::commit(uint32_t txnID) {
 //    std::lock_guard<std::mutex> lock(m_Mutex);

@@ -20,6 +20,7 @@ namespace pebble
         class CatalogManager {
         public:
             CatalogManager(BufferPool& bufferPool);
+            ~CatalogManager();
 
             void createCollection(const std::string& name, PageID rootPageID, PageID heapStartPageID);
 
@@ -29,10 +30,13 @@ namespace pebble
 
         private:
             BufferPool& m_BufferPool;
-            const PageID m_CatalogPageID = 1;
+            const PageID m_CatalogRootPageID = 1;
 
-            std::vector<CatalogEntry> loadCatalog() const;
-            void saveCatalog(const std::vector<CatalogEntry>& entries);
+            bool m_Dirty = false;
+            std::vector<CatalogEntry> m_Entries;
+
+            void loadCatalog();
+            void saveCatalog();
         };
 
     }

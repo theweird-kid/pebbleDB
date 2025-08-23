@@ -118,6 +118,7 @@ void WindowsFileManager::writePage(const Page& page) {
 
     // Ensure data is flushed to disk
     FlushFileBuffers(m_FileHandle);
+
 }
 
 
@@ -159,7 +160,7 @@ void WindowsFileManager::freePage(uint32_t pageID)
 
     // Guard: never free reserved pages
     if (pageID < 2) {
-        // either ignore or throw — I’d assert in debug:
+        // either ignore or throw ï¿½ Iï¿½d assert in debug:
         // throw std::runtime_error("Attempted to free reserved page");
         return;
     }

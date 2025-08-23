@@ -7,18 +7,18 @@
 namespace pebble {
     namespace core
     {
-
         constexpr size_t PAGE_SIZE = 4096;
 
         using PageID = uint32_t;
 
-        enum class PageType : uint32_t {
+        enum class PageType : PageID {
             INVALID = 0,
             LEAF = 1,
             INTERNAL = 2,
             META = 3,
-            FREE = 4,
-            HEAP = 5
+            CATALOG = 4,
+            FREE = 5,
+            HEAP = 6
         };
 
         struct PageHeader {

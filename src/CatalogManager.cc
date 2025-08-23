@@ -6,17 +6,26 @@ using namespace pebble::core;
 CatalogManager::CatalogManager(BufferPool& bp)
     : m_BufferPool(bp)
 {
-    Page& page = m_BufferPool.fetchPage(m_CatalogPageID);
-    if(page.header()->m_Type != PageType::META) {
-        page.header()->m_Type = PageType::META;
-        page.header()->m_PageID = m_CatalogPageID;
+    Page& page = m_BufferPool.fetchPage(m_CatalogRootPageID);
+    if(page.header()->m_Type != PageType::CATALOG) 
+    {
+        page.header()->m_Type = PageType::CATALOG;
+        page.header()->m_PageID = m_CatalogRootPageID;
         page.header()->m_NextPageID = 0;
         std::memset(page.payload(), 0, PAYLOAD_SIZE);
-        m_BufferPool.markDirty(m_CatalogPageID);
+        m_BufferPool.markDirty(m_CatalogRootPageID);
     }
 
-    m_BufferPool.unpinPage(m_CatalogPageID);
+    m_BufferPool.unpinPage(m_CatalogRootPageID);
+    loadCatalog();
 }
+
+CatalogManager::~CatalogManager() {
+    if (m_Dirty) {
+        saveCatalog();
+    }
+}
+
 
 void CatalogManager::createCollection(
     const std::string& name,
@@ -26,22 +35,20 @@ void CatalogManager::createCollection(
 {
     assert(name.size() < 256);
 
-    auto entries = loadCatalog();
-    for(auto& entry: entries) {
+    for(auto& entry: m_Entries) {
         if(entry.name == name)
             return;             // collection already exists
     }
 
-    entries.push_back({ name, rootPageID, heapStartPageID });
-    saveCatalog(entries);
+    m_Entries.push_back({ name, rootPageID, heapStartPageID });
+    m_Dirty = true;
 }
 
 std::optional<std::pair<PageID, PageID>> CatalogManager::getCollectionMeta(
     const std::string& name
 )
 {
-    auto entries = loadCatalog();
-    for (auto& entry : entries) {
+    for (auto& entry : m_Entries) {
         if (entry.name == name) {
             return std::make_pair(entry.rootPageID, entry.heapStartPageID);
         }
@@ -49,63 +56,132 @@ std::optional<std::pair<PageID, PageID>> CatalogManager::getCollectionMeta(
     return std::nullopt;
 }
 
-std::vector<CatalogEntry> CatalogManager::loadCatalog() const
+void CatalogManager::loadCatalog()
 {
-    Page& page = m_BufferPool.fetchPage(m_CatalogPageID);
-    const char* ptr = page.payload();
-    const char* end = ptr + PAYLOAD_SIZE;
+    m_Entries.clear();
+    PageID current = m_CatalogRootPageID;
 
-    std::vector<CatalogEntry> entries;
-    while(ptr < end && (*ptr) != 0)
+    while (current != 0)
     {
-        uint8_t nameLen = static_cast<uint8_t>(*ptr++);
-        if(ptr + nameLen + 8 > end) break;
+        Page& page = m_BufferPool.fetchPage(current);
+        auto* header = page.header();
+        assert(header->m_Type == PageType::CATALOG);
 
-        std::string name(ptr, nameLen);
-        ptr += nameLen;
+        const char* ptr = page.payload();
+        const char* end = ptr + PAYLOAD_SIZE;
 
-        PageID rootPageID;
-        std::memcpy(&rootPageID, ptr, sizeof(PageID));
-        ptr += sizeof(PageID);
+        while (ptr < end && *ptr != 0)
+        {
+            uint8_t nameLen = static_cast<uint8_t>(*ptr++);
+            if (ptr + nameLen + 8 > end)
+                break;
 
-        PageID heapStartPageID;
-        std::memcpy(&heapStartPageID, ptr, sizeof(PageID));
-        ptr += sizeof(PageID);
+            // Collection Name
+            std::string name(ptr, nameLen);
+            ptr += nameLen;
 
-        entries.push_back({ name, rootPageID, heapStartPageID });
+            // Collection Index page
+            PageID indexRootPageID;
+            std::memcpy(&indexRootPageID, ptr, sizeof(PageID));
+            ptr += sizeof(PageID);
+
+            // Collection Heap page
+            PageID heapRootPageID;
+            std::memcpy(&heapRootPageID, ptr, sizeof(PageID));
+            ptr += sizeof(PageID);
+
+            m_Entries.push_back({ name, indexRootPageID, heapRootPageID });
+        }
+
+        current = header->m_NextPageID;
+        m_BufferPool.unpinPage(page.getPageID());
     }
-
-    m_BufferPool.unpinPage(m_CatalogPageID);
-    return entries;
 }
 
-void CatalogManager::saveCatalog(const std::vector<CatalogEntry>& entries) {
-    Page& page = m_BufferPool.fetchPage(m_CatalogPageID);
-    char* ptr = page.payload();
-    char* end = ptr + PAYLOAD_SIZE;
+void CatalogManager::saveCatalog() {
+    if (!m_Dirty) return;
 
-    for (const auto& entry : entries) {
-        uint8_t nameLen = static_cast<uint8_t>(entry.name.size());
-        if (ptr + 1 + nameLen + 8 > end) break;
+    PageID current = m_CatalogRootPageID;
+    auto it = m_Entries.begin();
 
-        *ptr++ = nameLen;
-        std::memcpy(ptr, entry.name.data(), nameLen);
-        ptr += nameLen;
+    while (it != m_Entries.end())
+    {
+        Page& page = m_BufferPool.fetchPage(current);
+        auto* header = page.header();
+        header->m_Type = PageType::CATALOG;
+        header->m_PageID = current;
 
-        std::memcpy(ptr, &entry.rootPageID, sizeof(PageID));
-        ptr += sizeof(PageID);
+        char* ptr = page.payload();
+        char* end = ptr + PAYLOAD_SIZE;
 
-        std::memcpy(ptr, &entry.heapStartPageID, sizeof(PageID));
-        ptr += sizeof(PageID);
+        while (it != m_Entries.end())
+        {
+            const CatalogEntry& entry = *it;
+            uint8_t nameLen = static_cast<uint8_t>(entry.name.size());
+            if (ptr + 1 + nameLen + 8 > end)
+                break;
+
+            // Collection Name
+            *ptr++ = nameLen;
+            std::memcpy(ptr, entry.name.data(), nameLen);
+            ptr += nameLen;
+
+            // Collection Index page
+            std::memcpy(ptr, &entry.rootPageID, sizeof(PageID));
+            ptr += sizeof(PageID);
+
+            // Collection Heap page
+            std::memcpy(ptr, &entry.heapStartPageID, sizeof(PageID));
+            ptr += sizeof(PageID);
+
+            ++it;
+        }
+
+        if (ptr < end) *ptr = 0;   // Terminator
+        m_BufferPool.markDirty(current);
+        m_BufferPool.unpinPage(current);
+
+        // If more entries remain, allocate next Page
+        if (it == m_Entries.end())
+        {
+            // Done writing entries, Free any extra linked pages ( if exists )
+            if (header->m_NextPageID != 0) {
+                PageID extra = header->m_NextPageID;
+                header->m_NextPageID = 0;
+                m_BufferPool.markDirty(current);
+
+                while (extra != 0) {
+                    Page& nextPage = m_BufferPool.fetchPage(extra);
+                    PageID nxt = nextPage.header()->m_NextPageID;
+                    m_BufferPool.freePage(extra);
+                    extra = nxt;
+                }
+            }
+            break;
+        }
+
+        // Need More space -> Reuse existing | allocate new
+        if (header->m_NextPageID != 0) {
+            current = header->m_NextPageID;
+        }
+        else {
+            PageID newPage = m_BufferPool.allocatePage();
+            Page& newPg = m_BufferPool.fetchPage(newPage);
+            newPg.header()->m_Type = PageType::CATALOG;
+            newPg.header()->m_PageID = newPage;
+            newPg.header()->m_NextPageID = 0;
+            std::memset(newPg.payload(), 0, PAYLOAD_SIZE);
+            m_BufferPool.markDirty(newPage);
+            m_BufferPool.unpinPage(newPage);
+
+
+            header->m_NextPageID = newPage;
+            m_BufferPool.markDirty(page.getPageID());
+            current = newPage;
+        }
     }
 
-    // Zero out the rest of the payload to mark the end
-    if (ptr < end) {
-        *ptr = 0;
-    }
-
-    m_BufferPool.markDirty(m_CatalogPageID);
-    m_BufferPool.unpinPage(m_CatalogPageID);
+    m_Dirty = false;
 }
 
 void CatalogManager::updateCollectionMeta(
@@ -114,12 +190,10 @@ void CatalogManager::updateCollectionMeta(
     PageID newHeapStartPageID
 )
 {
-    auto entries = loadCatalog();
-    for (auto& entry : entries) {
+    for (auto& entry : m_Entries) {
         if (entry.name == name) {
             entry.rootPageID = newRootPageID;
             entry.heapStartPageID = newHeapStartPageID;
-            saveCatalog(entries);
             return;
         }
     }

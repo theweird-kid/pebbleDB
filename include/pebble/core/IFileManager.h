@@ -26,8 +26,12 @@ namespace pebble {
             // Flush any buffered writes to disk.
             virtual void flush() = 0;
 
+            // Check if a page exists in the file.
             virtual bool pageExists(uint32_t pageID) const = 0;
+
+            // Print freelist info (mainly for debugging).
+            virtual void printFreeList() = 0;
         };
 
-    }
-}
+    } 
+} 

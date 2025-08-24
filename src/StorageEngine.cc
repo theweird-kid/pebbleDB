@@ -164,3 +164,11 @@ StorageEngine::Collection* StorageEngine::loadCollection(const std::string& name
 	collections[name] = std::move(col);
 	return &collections[name];
 }
+
+void StorageEngine::showCollections() const
+{
+	auto tempCollections = m_CatalogManager.getCollections();
+	for (auto& collection : tempCollections) {
+		std::cout << collection.name << std::endl;
+	}
+};

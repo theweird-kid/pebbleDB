@@ -23,6 +23,7 @@ namespace pebble {
 			// Collection Management
 			bool createCollection(const std::string& name);
 			bool dropCollection(const std::string& name);
+			void showCollections() const;
 
 			// CRUD
 			bool insert(const std::string& collection, int key, const std::string& value);

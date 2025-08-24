@@ -15,8 +15,8 @@ HeapFile::HeapFile(const std::string& name, BufferPool& bp, PageID startPageID)
     while (curr != 0 && curr != static_cast<PageID>(-1)) {
         m_Pages.push_back(curr);
         Page& page = m_BufferPool.fetchPage(curr);
+        m_BufferPool.unpinPage(curr);
         curr = page.header()->m_NextPageID;
-        m_BufferPool.unpinPage(curr);  // unpin current page
     }
 }
 

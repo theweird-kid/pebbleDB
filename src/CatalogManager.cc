@@ -20,6 +20,11 @@ CatalogManager::CatalogManager(BufferPool& bp)
     loadCatalog();
 }
 
+std::vector<CatalogEntry> CatalogManager::getCollections() const
+{
+    return m_Entries;
+}
+
 CatalogManager::~CatalogManager() {
     if (m_Dirty) {
         saveCatalog();

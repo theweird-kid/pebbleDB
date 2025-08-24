@@ -12,6 +12,7 @@ CLI::CLI(StorageEngine& engine)
 void CLI::printHelp() const
 {
 	std::cout << "Avaliable commands:\n"
+		<< "\tshow collections\n"
 		<< "\tcreate <collection>\n"
 		<< "\tinsert <collection> <key> <value>\n"
 		<< "\tget <collection> <key>\n"
@@ -29,6 +30,10 @@ void CLI::handleCommand(const std::string& line)
 	if (cmd == "help")
 	{
 		printHelp();
+	}
+	else if (cmd == "show")
+	{
+		m_Engine.showCollections();
 	}
 	else if (cmd == "create")
 	{

@@ -28,6 +28,8 @@ namespace pebble
 
             void updateCollectionMeta(const std::string& name, PageID newRootPageID, PageID newHeapStartPageID);
 
+            std::vector<CatalogEntry> getCollections() const;
+
         private:
             BufferPool& m_BufferPool;
             const PageID m_CatalogRootPageID = 1;

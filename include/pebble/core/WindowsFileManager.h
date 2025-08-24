@@ -22,7 +22,7 @@ namespace pebble {
 
             void flush() override;
 
-            void printFreeList();
+            void printFreeList() override;
 
             bool pageExists(uint32_t pageID) const override;
 
